@@ -284,9 +284,7 @@ Disable it in production with `docs.enabled: false`.
 
 ## 💬 Support & Community
 
-- 🐛 **Bug reports** — [GitHub Issues](https://github.com/your-repo/statfyr/issues)
-- 💡 **Feature requests** — [GitHub Discussions](https://github.com/your-repo/statfyr/discussions)
-- 📖 **Full documentation** — [Wiki](https://github.com/your-repo/statfyr/wiki)
+- Comming soon!!
 
 ---
 
