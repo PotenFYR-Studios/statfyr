@@ -77,7 +77,7 @@ public final class ResponseUtil {
 
         exchange.getResponseHeaders().set(
                 "Server",
-                "StatFYR"
+                "Statfyr"
         );
 
         // Compression

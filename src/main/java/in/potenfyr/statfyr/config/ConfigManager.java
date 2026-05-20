@@ -16,7 +16,7 @@ import java.util.Date;
 import java.util.List;
 
 /**
- * Handles everything related to StatFYR configuration management.
+ * Handles everything related to Statfyr configuration management.
  *
  * <p>This class is responsible for:
  * <ul>
@@ -1135,7 +1135,7 @@ public final class ConfigManager {
     public void dumpConfigState() {
 
         plugin.getLogger().info(
-                "===== StatFYR Config ====="
+                "===== Statfyr Config ====="
         );
 
         plugin.getLogger().info(

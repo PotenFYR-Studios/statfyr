@@ -1,4 +1,4 @@
-# StatFYR API Documentation
+# Statfyr API Documentation
 
 ## Base URL
 

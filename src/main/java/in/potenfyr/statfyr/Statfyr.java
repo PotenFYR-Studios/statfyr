@@ -72,13 +72,13 @@ public final class Statfyr extends JavaPlugin {
 
             initializeHttp();
 
-            getLogger().info("StatFYR enabled successfully.");
+            getLogger().info("Statfyr enabled successfully.");
 
         } catch (Exception exception) {
 
             getLogger().log(
                     Level.SEVERE,
-                    "Failed to enable StatFYR",
+                    "Failed to enable Statfyr",
                     exception
             );
 
@@ -95,7 +95,7 @@ public final class Statfyr extends JavaPlugin {
 
         shutdownExecutor();
 
-        getLogger().info("StatFYR disabled.");
+        getLogger().info("Statfyr disabled.");
     }
 
     // -------------------------------------------------------------------------
@@ -206,7 +206,7 @@ public final class Statfyr extends JavaPlugin {
     public boolean onCommand(
             CommandSender sender,
             Command command,
-            String label,   
+            String label,
             String[] args
     ) {
 
@@ -268,19 +268,19 @@ public final class Statfyr extends JavaPlugin {
             initializeHttp();
 
             sender.sendMessage(
-                    "§aStatFYR reloaded successfully."
+                    "§aStatfyr reloaded successfully."
             );
 
         } catch (Exception exception) {
 
             getLogger().log(
                     Level.SEVERE,
-                    "Failed to reload StatFYR",
+                    "Failed to reload Statfyr",
                     exception
             );
 
             sender.sendMessage(
-                    "§cFailed to reload StatFYR."
+                    "§cFailed to reload Statfyr."
             );
         }
     }
@@ -291,7 +291,7 @@ public final class Statfyr extends JavaPlugin {
 
     private void showStatus(CommandSender sender) {
 
-        sender.sendMessage("§6=== StatFYR Status ===");
+        sender.sendMessage("§6=== Statfyr Status ===");
 
         sender.sendMessage(
                 "§eHTTP Running: §f" +

@@ -197,7 +197,7 @@ public final class HttpServer {
                             200,
                             """
                                     {
-                                      "name":"StatFYR",
+                                      "name":"Statfyr",
                                       "version":"1.0.0",
                                       "base_url":"/api",
                                       "authentication":"Bearer token optional",
@@ -242,7 +242,7 @@ public final class HttpServer {
                             200,
                             """
                                     {
-                                      "name":"StatFYR",
+                                      "name":"Statfyr",
                                       "version":"1.0.0",
                                       "docs":"/api/docs"
                                     }
