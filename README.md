@@ -115,21 +115,48 @@ Authorization: Bearer your-secret-key
 
 ```json
 {
-  "uuid": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-  "name": "Steve",
-  "online": true,
-  "playtime_formatted": "6h 55m",
+  "uuid": "xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "name": "Alex",
+  "online": false,
+  "playtime_ticks": 125,
+  "playtime_seconds": 6,
+  "playtime_formatted": "6s",
   "combat": {
-    "deaths": 4,
-    "mob_kills": 120
+    "deaths": 0,
+    "player_kills": 0,
+    "mob_kills": 0,
+    "damage_dealt": 0,
+    "damage_taken": 0
   },
   "movement": {
-    "total_distance_km": 25.3,
-    "jumps": 1200
+    "distance_walked_cm": 0,
+    "distance_walked_m": 0,
+    "distance_sprinted_cm": 0,
+    "distance_sprinted_m": 0,
+    "distance_flown_cm": 0,
+    "distance_flown_m": 0,
+    "distance_swum_cm": 0,
+    "distance_swum_m": 0,
+    "total_distance_cm": 0,
+    "total_distance_m": 0,
+    "total_distance_km": 0,
+    "jumps": 0
   },
   "activity": {
-    "blocks_mined": 4200,
-    "items_crafted": 150
+    "chests_opened": 0,
+    "items_crafted": 0,
+    "items_broken": 0,
+    "items_used": 0,
+    "items_picked_up": 0,
+    "items_dropped": 0,
+    "blocks_mined": 0
+  },
+  "metadata": {
+    "generated_at": "2026-05-20T11:17:16.252462500Z",
+    "execution_time_ms": 34,
+    "movement_enabled": true,
+    "combat_enabled": true,
+    "activity_enabled": true
   }
 }
 ```
@@ -138,21 +165,27 @@ Authorization: Bearer your-secret-key
 
 ```json
 {
-  "type": "playtime",
+  "stat": "playtime",
+  "total": 1,
+  "limit": 25,
+  "offset": 0,
+  "page": 1,
   "entries": [
     {
       "rank": 1,
-      "uuid": "...",
+      "uuid": "xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
       "name": "Steve",
-      "value": 500000
-    },
-    {
-      "rank": 2,
-      "uuid": "...",
-      "name": "Alex",
-      "value": 380000
+      "online": false,
+      "value": 125,
+      "formatted": "6s"
     }
-  ]
+  ],
+  "metadata": {
+    "generated_at": "2026-05-20T11:18:07.625703400Z",
+    "execution_time_ms": 3,
+    "ascending": false,
+    "online_only": false
+  }
 }
 ```
 
