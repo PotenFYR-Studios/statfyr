@@ -1,0 +1,18 @@
+name: statfyr
+version: ${project.version}
+main: in.potenfyr.statfyr.Statfyr
+api-version: 1.16
+description: Exposes Minecraft player statistics via a built-in HTTP REST API
+author: statfyr
+website: https://github.com/statfyr
+
+commands:
+  statfyr:
+    description: statfyr management commands
+    usage: /statfyr <reload|status>
+    permission: statfyr.admin
+
+permissions:
+  statfyr.admin:
+    description: Allows managing the statfyr plugin
+    default: op

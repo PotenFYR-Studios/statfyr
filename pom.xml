@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>in.potenfyr</groupId>
+    <artifactId>Statfyr</artifactId>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+
+    <name>statfyr</name>
+    <description>Exposes Minecraft player stats via a built-in HTTP REST API</description>
+
+    <properties>
+        <java.version>16</java.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>${java.version}</maven.compiler.source>
+        <maven.compiler.target>${java.version}</maven.compiler.target>
+    </properties>
+
+    <repositories>
+        <repository>
+            <id>papermc</id>
+            <url>https://repo.papermc.io/repository/maven-public/</url>
+        </repository>
+
+        <repository>
+
+            <id>sonatype</id>
+
+            <url>
+                https://oss.sonatype.org/content/repositories/snapshots/
+            </url>
+
+        </repository>
+    </repositories>
+
+    <dependencies>
+        <!--
+            Paper API — provided scope: never bundled into the final JAR.
+            Using 1.21.1 for compilation; the plugin is backward-compatible
+            to 1.16.5 because we only use stable Bukkit API surface.
+        -->
+        <dependency>
+
+            <groupId>
+                com.destroystokyo.paper
+            </groupId>
+
+            <artifactId>
+                paper-api
+            </artifactId>
+
+            <version>
+                1.16.5-R0.1-SNAPSHOT
+            </version>
+
+            <scope>
+                provided
+            </scope>
+
+        </dependency>
+    </dependencies>
+
+    <build>
+        <defaultGoal>clean package</defaultGoal>
+        <finalName>${project.name}-${project.version}</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <source>16</source>
+                    <target>16</target>
+                    <encoding>UTF-8</encoding>
+                </configuration>
+            </plugin>
+            <!--
+                No shade plugin needed: we have zero runtime dependencies to bundle.
+                com.sun.net.httpserver is part of the JDK.
+                Gson is always present on Paper's classpath at runtime.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.1</version>
+            </plugin>
+        </plugins>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
+    </build>
+</project>
