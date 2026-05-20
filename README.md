@@ -2,7 +2,7 @@
 
 
 <!-- Banner -->
-<img src="src/main/resources/statfyrbanner.png" alt="Statfyr Banner" width="100%"/>
+<img src="https://i.imgur.com/9IwT9gW.png" alt="Statfyr Banner" width="100%"/>
 
 <br/>
 
