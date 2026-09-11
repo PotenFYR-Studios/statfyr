@@ -3,14 +3,10 @@ name: Build Plugin
 on:
   push:
     branches:
-      - plugin-alpha
-      - main
       - master
 
   pull_request:
     branches:
-      - plugin-alpha
-      - main
       - master
 
 jobs:
