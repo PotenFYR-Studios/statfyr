@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, usePath, navigate, DOC_ROUTES, docIndex, type DocRoute } from "../lib/router";
+import { Link, usePath, navigate, DOC_ROUTES, docIndex, type DocRoute, withBase} from "../lib/router";
 import { Eyebrow } from "./ui";
 
 /* ------------------------------------------------------------------ brand */
@@ -7,7 +7,7 @@ import { Eyebrow } from "./ui";
 function BrandMark() {
   return (
     <img
-      src="/favicon.png"
+      src={withBase("/favicon.png")}
       alt=""
       width={22}
       height={22}
@@ -134,13 +134,13 @@ function Footer() {
               <a className="footer-link" href="https://github.com/PotenFYR-Studios" target="_blank" rel="noopener noreferrer">GitHub Org</a>
               <a className="footer-link" href="https://potenfyr.in" target="_blank" rel="noopener noreferrer">potenfyr.in</a>
               <a className="footer-link" href="https://modrinth.com/plugin/statfyr" target="_blank" rel="noopener noreferrer">Modrinth</a>
-              <a className="footer-link" href="/docs" onClick={(e) => { e.preventDefault(); navigate("/docs"); }}>Docs</a>
-              <a className="footer-link" href="/examples" onClick={(e) => { e.preventDefault(); navigate("/examples"); }}>Examples</a>
-              <a className="footer-link" href="/license" onClick={(e) => { e.preventDefault(); navigate("/license"); }}>License</a>
+              <a className="footer-link" href={withBase("/docs")} onClick={(e) => { e.preventDefault(); navigate("/docs"); }}>Docs</a>
+              <a className="footer-link" href={withBase("/examples")} onClick={(e) => { e.preventDefault(); navigate("/examples"); }}>Examples</a>
+              <a className="footer-link" href={withBase("/license")} onClick={(e) => { e.preventDefault(); navigate("/license"); }}>License</a>
             </div>
             <p className="text-xs text-[#6a7089]">
               © 2026 PotenFYR Studios.{" "}
-              <a className="underline decoration-[#3a3f55] underline-offset-2 hover:decoration-[#8b5cf6]" href="/license" onClick={(e) => { e.preventDefault(); navigate("/license"); }}>Apache-2.0 with the Commons Clause</a>
+              <a className="underline decoration-[#3a3f55] underline-offset-2 hover:decoration-[#8b5cf6]" href={withBase("/license")} onClick={(e) => { e.preventDefault(); navigate("/license"); }}>Apache-2.0 with the Commons Clause</a>
             </p>
           </div>
         </div>

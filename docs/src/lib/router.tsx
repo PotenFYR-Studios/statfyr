@@ -1,5 +1,33 @@
 import { useSyncExternalStore } from "react";
 
+/* ------------------------------------------------------------------- base */
+
+/**
+ * Base path the site is served under. Set at build time via VITE_BASE
+ * (vite.config `base`); falls back through the runtime env so the
+ * prerender script executed outside vite still resolves it.
+ */
+const envBase: unknown = import.meta.env?.BASE_URL;
+const BASE: string =
+  typeof envBase === "string" ? envBase
+  : typeof process !== "undefined" ? process.env?.VITE_BASE ?? "/"
+  : "/";
+
+/** Prefix an absolute site path with the serving base (idempotent). */
+export function withBase(p: string): string {
+  if (BASE !== "/" && (p === BASE || p.startsWith(BASE))) return p;
+  if (!p.startsWith("/")) return p;
+  return `${BASE}${p.slice(1)}`;
+}
+
+/** Remove the serving base from a URL path (idempotent). */
+export function stripBase(pathname: string): string {
+  if (BASE === "/") return pathname;
+  if (pathname === BASE) return "/";
+  if (pathname.startsWith(BASE)) return pathname.slice(BASE.length - 1);
+  return pathname;
+}
+
 /* ------------------------------------------------------------------ store */
 
 const listeners = new Set<() => void>();
@@ -18,7 +46,7 @@ function subscribe(fn: () => void) {
 }
 
 const getPath = () => {
-  const p = window.location.pathname;
+  const p = stripBase(window.location.pathname);
   /* Directory twins are served at "path/"; normalize so cold loads match. */
   let out = p.length > 1 && p.endsWith("/") ? p.slice(0, -1) : p;
   /* .html twins (examples.html) hydrate to the same page as the directory. */
@@ -40,8 +68,9 @@ export function usePath(): string {
 }
 
 export function navigate(to: string, replace = false) {
-  if (replace) window.history.replaceState({}, "", to);
-  else window.history.pushState({}, "", to);
+  const url = withBase(to);
+  if (replace) window.history.replaceState({}, "", url);
+  else window.history.pushState({}, "", url);
   emit();
 }
 
@@ -57,7 +86,7 @@ export type LinkProps = {
 export function Link({ to, children, className, ariaLabel }: LinkProps) {
   return (
     <a
-      href={to}
+      href={withBase(to)}
       className={className}
       aria-label={ariaLabel}
       onClick={(e) => {

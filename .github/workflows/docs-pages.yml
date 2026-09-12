@@ -41,13 +41,22 @@ jobs:
         working-directory: docs
         run: bun install --frozen-lockfile
 
-      - name: Build docs site
-        working-directory: docs
-        run: bun run build
-
-      - name: Setup Pages
+      - name: Configure GitHub Pages
+        id: pages
         if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v6
+        with:
+          enablement: true
+
+      - name: Build docs site
+        working-directory: docs
+        run: |
+          BASE_URL="${{ steps.pages.outputs.base_url }}"
+          case "$BASE_URL" in
+            ""|*github.io*) export VITE_BASE="/statfyr/" ;;
+            *) export VITE_BASE="/" ;;
+          esac
+          bun run build
 
       - name: Upload Pages artifact
         if: github.event_name != 'pull_request'

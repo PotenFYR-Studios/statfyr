@@ -271,7 +271,7 @@ function multiPageEmit(): Plugin {
 
 export default defineConfig({
   root: __dirname,
-  base: "/",
+  base: process.env.VITE_BASE ?? "/",
   plugins: [react(), tailwindcss(), multiPageEmit()],
   build: {
     outDir: "dist",
