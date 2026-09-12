@@ -155,7 +155,6 @@ export function GlowOrb({
         width: size,
         height: size,
         background: color,
-        animation: "orb-pulse 3.2s ease-in-out infinite",
       }}
     />
   );

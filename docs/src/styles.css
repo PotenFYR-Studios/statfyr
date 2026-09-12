@@ -312,13 +312,7 @@ pre *::-webkit-scrollbar-thumb,
   border-radius: 999px;
   background: #10b981;
   box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
-  animation: pulse-dot 2.4s ease-in-out infinite;
 }
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.45; }
-}
-
 .hero-badge {
   display: inline-flex;
   align-items: center;
@@ -911,11 +905,6 @@ a.breadcrumb:hover {
   0% { transform: rotate(215deg) translateX(0); opacity: 1; }
   70% { opacity: 1; }
   100% { transform: rotate(215deg) translateX(-620px); opacity: 0; }
-}
-
-@keyframes orb-pulse {
-  0%, 100% { opacity: 0.85; }
-  50% { opacity: 0.55; }
 }
 
 @keyframes hero-enter {
