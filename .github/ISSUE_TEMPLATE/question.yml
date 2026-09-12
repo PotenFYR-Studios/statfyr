@@ -1,0 +1,30 @@
+name: Question
+description: Ask how something works before opening a feature request or bug report
+labels: [question]
+title: "[Question]: "
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      description: Be specific; include the endpoint, config key, or command involved.
+      placeholder: |
+        Does /api/leaderboard/playtime include offline players by default?
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: What have you tried?
+      description: Which docs pages did you check, and what did you try on your server?
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Before asking
+      options:
+        - label: I checked the [documentation](https://statfyr.docs.potenfyr.in), including the [FAQ](https://statfyr.docs.potenfyr.in/docs/faq)
+          required: true

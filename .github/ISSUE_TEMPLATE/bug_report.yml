@@ -1,0 +1,97 @@
+name: Bug Report
+description: Something in Statfyr is broken or behaving unexpectedly
+labels: [bug]
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out the details below; the more precise the reproduction, the faster this gets fixed.
+
+        > [!NOTE]
+        > If this is a **security vulnerability** (auth bypass, injection, whitelist/rate-limit bypass, etc.), do **not** use this form: follow the confidential process in [SECURITY.md](../blob/master/SECURITY.md).
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, including what you expected to happen instead.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: plugin-version
+    attributes:
+      label: Plugin version
+      description: Run `/statfyr status` or check the jar filename.
+      options:
+        - 1.0.0-BETA
+        - Other (please specify below)
+    validations:
+      required: true
+
+  - type: input
+    id: server-version
+    attributes:
+      label: Server version
+      description: The output of `/version` on your server (e.g. `Paper 1.21.4-232-...`).
+      placeholder: "Paper 1.21.4"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: server-type
+    attributes:
+      label: Server type
+      options:
+        - Paper
+        - Spigot
+        - Purpur
+        - Other fork (please specify below)
+    validations:
+      required: true
+
+  - type: input
+    id: java-version
+    attributes:
+      label: Java version
+      description: The output of `java -version` used to run the server.
+      placeholder: "OpenJDK 21.0.5"
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Minimal steps to reproduce, including the exact HTTP requests (method, path, query params, headers) and responses where relevant.
+      placeholder: |
+        1. Start server with default config
+        2. `curl http://localhost:8080/api/players?limit=0`
+        3. Observe `500` response
+      render: bash
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant config
+      description: The parts of `plugins/statfyr/config.yml` involved in the bug.
+      placeholder: |
+        security:
+          enable-api-key: true
+      render: yaml
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Server logs
+      description: Paste the relevant log excerpt (`logs/latest.log`).
+      placeholder: |
+        **Scrub before pasting:** remove your API key, keystore password, real player names/UUIDs and IPs. Replace them with obvious placeholders like `<redacted>`.
+      render: text
+    validations:
+      required: false

@@ -1,0 +1,52 @@
+name: Documentation
+description: Something in the docs or README is wrong, unclear, or missing
+labels: [documentation]
+title: "[Docs]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Spotted a typo, an inaccurate example, or a gap in the documentation? Tell us where. Docs issues are a great first contribution, and PRs are welcome too.
+
+  - type: dropdown
+    id: location
+    attributes:
+      label: Where is the problem?
+      options:
+        - Docs site (statfyr.docs.potenfyr.in)
+        - README
+        - Built-in `/api/docs` endpoint
+        - Config comments (`config.yml`)
+        - Somewhere else (please specify below)
+    validations:
+      required: true
+
+  - type: input
+    id: page
+    attributes:
+      label: Page or section
+      description: The page URL, section heading, or config key involved.
+      placeholder: "https://statfyr.docs.potenfyr.in/docs/configuration"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: problem-type
+    attributes:
+      label: What kind of problem?
+      options:
+        - Missing information
+        - Incorrect information
+        - Unclear / confusing
+        - Outdated
+        - Typo / formatting
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: What does the documentation say, what should it say instead, and how did you confirm the correct behavior?
+    validations:
+      required: true

@@ -1,0 +1,175 @@
+import { useEffect } from "react";
+import { Link, applyMeta } from "../lib/router";
+import { DocsShell } from "../components/layout";
+import { Callout, CodeBlock } from "../components/ui";
+
+const TOC = [
+  { id: "client-setup", label: "A tiny API client" },
+  { id: "dashboard", label: "Live dashboard" },
+  { id: "leaderboard", label: "Leaderboard page" },
+  { id: "discord-bot", label: "Discord bot" },
+  { id: "polling-tips", label: "Polling tips" },
+];
+
+export default function Examples() {
+  useEffect(() => {
+    applyMeta({
+      title: "Integration Examples · Statfyr Docs",
+      description:
+        "Copy-paste recipes for Statfyr: a fetch client, a live player dashboard, a paginated leaderboard, and a Discord bot wired to the REST API.",
+      path: "/docs/examples",
+    });
+  }, []);
+
+  return (
+    <DocsShell
+      crumbs={[
+        { label: "Docs", to: "/docs" },
+        { label: "v1.0.0-BETA" },
+        { label: "Examples" },
+      ]}
+      title="Integration Examples"
+      lede="Working recipes against the real API. Swap in your host, port, and Bearer key and each one runs as-is."
+      toc={TOC}
+    >
+      <Callout kind="note">
+        This page covers full integrations. For the ready-to-paste config.yml and a curl
+        walkthrough of every endpoint, start with the{" "}
+        <Link to="/examples">setup examples</Link>.
+      </Callout>
+
+      <h2 id="client-setup">A tiny API client</h2>
+      <p>
+        One helper covers every recipe below: it prefixes the base URL, attaches the Bearer key,
+        unwraps JSON, and throws on non-2xx.
+      </p>
+      <CodeBlock
+        lang="javascript"
+        filename="statfyr-client.js"
+        code={`export function createClient({ baseUrl = "http://localhost:8080", apiKey = "" } = {}) {
+  async function get(path) {
+    const res = await fetch(\`\${baseUrl}\${path}\`, {
+      headers: apiKey ? { Authorization: \`Bearer \${apiKey}\` } : {},
+    });
+    if (!res.ok) throw new Error(\`\${res.status} \${res.statusText}\`);
+    return res.json();
+  }
+  return {
+    health: () => get("/api/health"),
+    players: (q = "") => get(\`/api/players\${q}\`),
+    playerStats: (id, q = "") => get(\`/api/player/\${id}\${q}\`),
+    playerSummary: (id, q = "") => get(\`/api/player/\${id}/summary\${q}\`),
+    leaderboard: (stat, q = "") => get(\`/api/leaderboard/\${stat}\${q}\`),
+  };
+}`}
+      />
+
+      <h2 id="dashboard">Live dashboard</h2>
+      <p>
+        Poll the summary endpoint every 30 seconds, which matches the plugin's cache TTL, so no
+        request ever pays for a full statistic re-read.
+      </p>
+      <CodeBlock
+        lang="javascript"
+        code={`import { createClient } from "./statfyr-client.js";
+
+const api = createClient({ baseUrl, apiKey });
+
+async function renderPlayer(uuid) {
+  const s = await api.playerSummary(uuid);
+  document.querySelector("#playtime").textContent = s.playtime_formatted;
+  document.querySelector("#kills").textContent =
+    \`\${s.combat.player_kills} players · \${s.combat.mob_kills} mobs\`;
+  document.querySelector("#distance").textContent =
+    \`\${s.movement.total_distance_km.toFixed(1)} km walked\`;
+  document.querySelector("#mined").textContent = s.activity.blocks_mined.toLocaleString();
+}
+
+renderPlayer("069a79f4-44e9-4726-a5be-fca90e38aaf5");
+setInterval(() => renderPlayer("069a79f4-44e9-4726-a5be-fca90e38aaf5"), 30_000);`}
+      />
+      <Callout kind="note">
+        From a browser, the page's origin must be allowed by CORS: with{" "}
+        <code>security.enable-cors: true</code> statfyr answers with{" "}
+        <code>Access-Control-Allow-Origin: *</code>, so any origin works today.
+      </Callout>
+
+      <h2 id="leaderboard">Leaderboard page</h2>
+      <p>
+        <code>rank</code> is computed as offset + position, so paging through with{" "}
+        <code>limit</code> and <code>page</code> keeps continuous global ranks:
+      </p>
+      <CodeBlock
+        lang="javascript"
+        code={`const api = createClient({ baseUrl, apiKey });
+
+async function topPlaytime(page = 0, limit = 10) {
+  const lb = await api.leaderboard(
+    "playtime",
+    \`?limit=\${limit}&page=\${page}&order=desc\`,
+  );
+  for (const e of lb.entries) {
+    console.log(\`#\${e.rank} \${e.name} · \${e.formatted}\`);
+  }
+  console.log(\`page \${lb.page} of \${Math.ceil(lb.total / lb.limit)}\`);
+}
+
+topPlaytime();`}
+      />
+
+      <h2 id="discord-bot">Discord bot</h2>
+      <p>
+        A discord.js command that answers <code>/top</code> with the playtime leaderboard and can
+        look up a player's summary by name:
+      </p>
+      <CodeBlock
+        lang="javascript"
+        filename="bot.js"
+        code={`import { Client, GatewayIntentBits, EmbedBuilder } from "discord.js";
+import { createClient } from "./statfyr-client.js";
+
+const api = createClient({ baseUrl: process.env.STATFYR_URL, apiKey: process.env.STATFYR_API_KEY });
+const discord = new Client({ intents: [GatewayIntentBits.Guilds] });
+
+discord.on("interactionCreate", async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+
+  if (interaction.commandName === "top") {
+    const lb = await api.leaderboard("playtime", "?limit=10");
+    const lines = lb.entries.map((e) => \`**#\${e.rank}** \${e.name} · \${e.formatted}\`);
+    await interaction.reply({
+      embeds: [new EmbedBuilder()
+        .setTitle("Playtime leaderboard")
+        .setDescription(lines.join("\\n"))],
+    });
+  }
+
+  if (interaction.commandName === "stats") {
+    const name = interaction.options.getString("player");
+    const s = await api.playerSummary(name);
+    await interaction.reply(
+      \`\${s.name}: \${s.playtime_formatted} played, \${s.combat.deaths} deaths, \${s.activity.blocks_mined} blocks mined\`,
+    );
+  }
+});
+
+discord.login(process.env.DISCORD_TOKEN);`}
+      />
+      <Callout kind="warn">
+        Run the bot on a trusted host. The Bearer key grants full read access to every statistic;
+        never embed it in a client-side app or public repo.
+      </Callout>
+
+      <h2 id="polling-tips">Polling tips</h2>
+      <ul>
+        <li>
+          Align polling with the 30-second statistic cache: faster cycles burn your rate limit
+          (120 requests / 60 s by default) without fresher data.
+        </li>
+        <li>Use <code>/api/health</code> for uptime checks and <code>/api/players?online_only=true</code> for live rosters.</li>
+        <li>Need one section? <code>/api/player/&lt;id&gt;/summary?movement=false&amp;combat=false</code> slims the payload to activity only.</li>
+        <li>Send <code>Accept-Encoding: gzip</code> (fetch and axios do by default); large raw dumps compress well.</li>
+      </ul>
+    </DocsShell>
+  );
+}

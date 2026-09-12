@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://statfyr.docs.potenfyr.in
+    about: Installation, configuration reference, and the full API reference
+  - name: Security vulnerability
+    url: https://github.com/PotenFYR-Studios/statfyr/security
+    about: Report vulnerabilities confidentially via private vulnerability reporting; do not open a public issue

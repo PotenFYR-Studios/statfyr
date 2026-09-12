@@ -1,167 +1,102 @@
 <div align="center">
 
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:8b5cf6,50:ec4899,100:f97316&height=220&section=header&text=Statfyr&fontSize=52&fontColor=ffffff&fontAlignY=34&desc=A%20blazing-fast%20REST%20API%20for%20Minecraft%20player%20statistics&descSize=20&descAlignY=55&animation=twinkling" width="100%" alt="Statfyr banner"/>
 
-<!-- Banner -->
-<img src="https://i.imgur.com/9IwT9gW.png" alt="Statfyr Banner" width="100%"/>
+[![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=20&pause=1200&color=8B5CF6&center=true&vCenter=true&width=800&lines=Every+player+statistic%2C+one+JSON+API;Live+reads+with+zero+TPS+impact;Bearer+auth%2C+rate+limits%2C+gzip+built+in;Paper+%C2%B7+Spigot+%C2%B7+Purpur+1.16.5+to+1.21.x)](https://statfyr.docs.potenfyr.in)
 
-<br/>
-
-# Statfyr
-
-### A blazing-fast REST API for Minecraft player statistics
+[![Modrinth](https://img.shields.io/badge/Modrinth-statfyr-1bd96a?style=for-the-badge&logo=modrinth&logoColor=white&labelColor=1c1e26)](https://modrinth.com/plugin/statfyr)
+[![Docs](https://img.shields.io/badge/Docs-statfyr.docs.potenfyr.in-8b5cf6?style=for-the-badge&logo=githubpages&logoColor=white&labelColor=1c1e26)](https://statfyr.docs.potenfyr.in)
+[![Build](https://img.shields.io/github/actions/workflow/status/PotenFYR-Studios/statfyr/build.yml?branch=master&style=for-the-badge&logo=githubactions&label=Build&labelColor=1c1e26&color=2ea043)](https://github.com/PotenFYR-Studios/statfyr/actions/workflows/build.yml)
+[![License](https://img.shields.io/badge/License-Apache--2.0%20%2B%20Commons%20Clause-f97316?style=for-the-badge&labelColor=1c1e26)](LICENSE)
+[![Profile views](https://komarev.com/ghpvc/?username=PotenFYR-Studios-statfyr&color=ec4899&style=for-the-badge&label=PROFILE+VIEWS&labelColor=1c1e26)](https://github.com/PotenFYR-Studios/statfyr)
 
 </div>
 
----
+**Statfyr** is a blazing-fast REST API plugin for Minecraft that exposes player statistics (playtime, kills, deaths, blocks mined, items crafted, movement, and more) through a clean, documented HTTP interface. Built for **Paper, Spigot, and Purpur 1.16.5–1.21.x** with zero external dependencies: dashboards, Discord bots, leaderboard sites, and analytics tools all talk to your server over plain JSON.
 
-**Statfyr** is a lightweight Paper plugin that exposes your server's player statistics through a clean, documented REST
-API. Dashboards, bots, leaderboard websites, Discord integrations — build anything, in any language, against a single
-HTTP endpoint.
+Stats are read **asynchronously, off the main thread**, and served from an in-memory cache, so API traffic never touches your TPS.
+
+📚 **Full documentation → [statfyr.docs.potenfyr.in](https://statfyr.docs.potenfyr.in)**
 
 ---
 
 ## ✨ Features
 
-- 📊 **Full stat access** — playtime, kills, deaths, blocks mined, items crafted, movement, and more
-- 🏆 **Leaderboards** — ranked endpoints for playtime, kills, deaths, mined, and crafted
-- ⚡ **Async loading** — stats are fetched off the main thread, zero TPS impact
-- 🗜️ **gzip compression** — optional response compression for bandwidth efficiency
-- 🔐 **Bearer authentication** — lock your API behind a secret key
-- 🛡️ **Rate limiting** — per-IP request throttling out of the box
-- 🌐 **CORS support** — configurable allowed origins for browser-based clients
-- 🔒 **IP whitelist** — restrict access to specific trusted addresses
-- 🔑 **HTTPS / SSL** — optional TLS via Java keystore
-- 📄 **Built-in API docs** — browsable documentation at `/api/docs`
-- 🧩 **Pagination & sorting** — standard `limit`, `page`, and `order` params across all list endpoints
-- ⚙️ **Response caching** — configurable TTL to reduce repeated stat lookups
-
----
+- 📊 **Full stat access**: all nine vanilla statistic categories, live for online players and parsed from vanilla stat files for offline ones
+- 🏆 **Leaderboards**: `playtime` · `deaths` · `player_kills` · `mob_kills` · `blocks_mined` · `items_picked_up` · `items_crafted`
+- ⚡ **Async loading**: stats are fetched on background threads, zero TPS impact
+- 🗃️ **Response caching**: short-lived in-memory cache keeps repeated lookups cheap
+- 🔐 **Bearer authentication**: lock the API behind a secret key
+- 🛡️ **Rate limiting**: per-IP throttling out of the box (120 requests / 60 s by default)
+- 🌐 **CORS support**: browser-based dashboards work without a proxy
+- 🧱 **IP whitelist**: restrict access to trusted addresses
+- 🔑 **HTTPS / TLS**: optional, via a Java keystore
+- 📄 **Built-in API docs**: browsable endpoint reference at `/api/docs`
+- 🧩 **Pagination & sorting**: standard `limit`, `page`, and `order` params across list endpoints
+- 🗜️ **gzip compression**: automatic for clients that send `Accept-Encoding: gzip`
 
 ## 📋 Requirements
 
-| Requirement  | Version |
-|--------------|---------|
-| Java         | 16+     |
-| Paper/Spigot | 1.16.5+ |
+| Requirement   | Version                 |
+|---------------|-------------------------|
+| Java          | 16+                     |
+| Paper/Spigot/Purpur | 1.16.5 – 1.21.x   |
 
----
+## 🚀 Quick Start
 
-## 🚀 Installation
+1. Download the latest `.jar` from [Modrinth](https://modrinth.com/plugin/statfyr)
+2. Drop it into your server's `/plugins/` folder and restart
+3. Verify it's live:
 
-1. Download the latest `.jar` from the [Releases](https://modrinth.com/plugin/statfyr/versions) tab
-2. Drop it into your server's `/plugins/` folder
-3. Start (or restart) your server
-4. Edit `plugins/statfyr/config.yml` to your liking
-5. Use `/statfyr reload` to apply changes without a full restart
+   ```bash
+   curl http://localhost:8080/api/health
+   ```
 
-The API will be live at `http://your-server-ip:8080/api` by default.
+4. For anything beyond localhost, **enable authentication**: set `security.enable-api-key: true`, generate a strong random key into `security.api-key`, then call the API with `Authorization: Bearer <key>` (or set the `STATFYR_API_KEY` environment variable)
 
----
+Configuration changes apply with `/statfyr reload`; no restart needed.
 
 ## 🔌 API Overview
 
-All responses are JSON. The base URL for all endpoints is:
+All endpoints are `GET`-only and return JSON. The base URL is:
 
 ```
 http://your-server:8080/api
 ```
 
-### Endpoints at a Glance
+### Endpoints
 
-| Method | Endpoint                       | Description                            |
-|--------|--------------------------------|----------------------------------------|
-| `GET`  | `/api/health`                  | Server health and version info         |
-| `GET`  | `/api/players`                 | List all known players                 |
-| `GET`  | `/api/player/{player}`         | Full stats for a player (UUID or name) |
-| `GET`  | `/api/player/{player}/summary` | Lightweight summarized stats           |
-| `GET`  | `/api/leaderboard/{type}`      | Ranked leaderboard                     |
+| Method | Endpoint                        | Description                                        |
+|--------|---------------------------------|----------------------------------------------------|
+| `GET`  | `/api`                          | API index and version                               |
+| `GET`  | `/api/health`                   | Server health, memory, and feature flags            |
+| `GET`  | `/api/docs`                     | Built-in endpoint reference                         |
+| `GET`  | `/api/players`                  | Paginated player list (`limit`, `page`, `online_only`, `search`) |
+| `GET`  | `/api/player/{uuid\|name}`      | Full stats for one player                           |
+| `GET`  | `/api/player/{uuid\|name}/summary` | Lightweight movement/combat/activity summary     |
+| `GET`  | `/api/leaderboard/{stat}`       | Ranked leaderboard (`limit`, `offset`, `order`)     |
 
-### Leaderboard Types
+Valid `{stat}` values: `playtime`, `deaths`, `player_kills`, `mob_kills`, `blocks_mined`, `items_picked_up`, `items_crafted`.
 
-`playtime` · `kills` · `deaths` · `mined` · `crafted`
+### Examples
 
----
+```bash
+# Server health
+curl http://localhost:8080/api/health
 
-## 📖 Usage Examples
+# Five most recently online players
+curl "http://localhost:8080/api/players?limit=5&online_only=true"
 
-**Get all online players:**
+# A player's summary (by name or UUID)
+curl -H "Authorization: Bearer $STATFYR_API_KEY" \
+  "http://localhost:8080/api/player/Notch/summary"
 
-```http
-GET /api/players?online_only=true&limit=25
+# Top 10 by playtime
+curl "http://localhost:8080/api/leaderboard/playtime?limit=10"
 ```
 
-**Get a player's full stats, filtered to mined and crafted categories:**
-
-```http
-GET /api/player/Steve?summary=true&categories=mined,crafted
-```
-
-**Get the top 10 playtime leaderboard:**
-
-```http
-GET /api/leaderboard/playtime?limit=10&order=desc
-```
-
-**Authenticated request:**
-
-```http
-GET /api/players
-Authorization: Bearer your-secret-key
-```
-
----
-
-### Example Response — Player Summary
-
-```json
-{
-  "uuid": "xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-  "name": "Alex",
-  "online": false,
-  "playtime_ticks": 125,
-  "playtime_seconds": 6,
-  "playtime_formatted": "6s",
-  "combat": {
-    "deaths": 0,
-    "player_kills": 0,
-    "mob_kills": 0,
-    "damage_dealt": 0,
-    "damage_taken": 0
-  },
-  "movement": {
-    "distance_walked_cm": 0,
-    "distance_walked_m": 0,
-    "distance_sprinted_cm": 0,
-    "distance_sprinted_m": 0,
-    "distance_flown_cm": 0,
-    "distance_flown_m": 0,
-    "distance_swum_cm": 0,
-    "distance_swum_m": 0,
-    "total_distance_cm": 0,
-    "total_distance_m": 0,
-    "total_distance_km": 0,
-    "jumps": 0
-  },
-  "activity": {
-    "chests_opened": 0,
-    "items_crafted": 0,
-    "items_broken": 0,
-    "items_used": 0,
-    "items_picked_up": 0,
-    "items_dropped": 0,
-    "blocks_mined": 0
-  },
-  "metadata": {
-    "generated_at": "2026-05-20T11:17:16.252462500Z",
-    "execution_time_ms": 34,
-    "movement_enabled": true,
-    "combat_enabled": true,
-    "activity_enabled": true
-  }
-}
-```
-
-### Example Response — Leaderboard
+<details>
+<summary><strong>Example response: leaderboard</strong></summary>
 
 ```json
 {
@@ -189,51 +124,55 @@ Authorization: Bearer your-secret-key
 }
 ```
 
----
+</details>
+
+Every request shape, parameter, and response field is documented in the [API Reference](https://statfyr.docs.potenfyr.in/docs/api).
 
 ## ⚙️ Configuration
 
-The full config file is generated at `plugins/statfyr/config.yml` on first run.
+The config file is generated at `plugins/statfyr/config.yml` on first run. The core, enforced keys:
 
 ```yaml
 http:
   port: 8080
-  bind-address: "0.0.0.0"   # Use 127.0.0.1 to restrict to localhost
+  bind-address: "0.0.0.0"    # use 127.0.0.1 to keep the API localhost-only
+
+https:
+  enabled: false
+  keystore-path: "plugins/statfyr/keystore.jks"
 
 security:
-  enable-api-key: false      # Enable Bearer token auth
-  api-key: ""                # Set your key here, or via STATFYR_API_KEY env var
-
+  enable-api-key: false
+  api-key: ""                # or set the STATFYR_API_KEY env var
   enable-rate-limit: true
-  rate-limit-requests: 120   # Requests per window
+  rate-limit-requests: 120
   rate-limit-window-seconds: 60
-
   enable-cors: true
-  allowed-origins:
-    - "*"                    # Lock this down in production
+  enable-ip-whitelist: false
+  allowed-ips: []
 
-cache:
-  ttl-seconds: 60
-  refresh-seconds: 10
+pagination:
+  default-limit: 25
+  max-limit: 100
 ```
 
-**Environment variable overrides:**
+**Environment variable overrides** (take precedence over the config file):
 
-| Variable                    | Config Key                |
-|-----------------------------|---------------------------|
-| `STATFYR_API_KEY`           | `security.api-key`        |
-| `STATFYR_KEYSTORE_PASSWORD` | `https.keystore-password` |
+| Variable                    | Config key                 |
+|-----------------------------|----------------------------|
+| `STATFYR_API_KEY`           | `security.api-key`         |
+| `STATFYR_KEYSTORE_PASSWORD` | `https.keystore-password`  |
 
----
+> Some keys shipped in `config.yml` (compression, async, cache, docs, and a few others) are read but **not yet enforced** in the 1.0.0-BETA build; the [configuration reference](https://statfyr.docs.potenfyr.in/docs/configuration) marks every key as enforced or reserved.
 
 ## 🔒 Securing Your API
 
-For production servers, it is strongly recommended to:
+For any server reachable beyond localhost:
 
-1. **Enable API key authentication** — set `enable-api-key: true` and generate a strong random key
-2. **Restrict CORS origins** — replace `"*"` with your dashboard's actual domain
-3. **Enable IP whitelisting** — if only known services need access, lock it to those IPs
-4. **Enable HTTPS** — generate a keystore and set `https.enabled: true`
+1. **Enable API key authentication**: `security.enable-api-key: true` with a long random key
+2. **Enable HTTPS**: generate a keystore and set `https.enabled: true`
+3. **Restrict the bind address**: `http.bind-address: "127.0.0.1"` if only local services (e.g. a reverse proxy) need access
+4. **Enable IP whitelisting**: `security.enable-ip-whitelist: true` with your dashboard's IPs
 
 **Generate a keystore for HTTPS:**
 
@@ -245,21 +184,14 @@ keytool -genkeypair -alias statfyr \
   -validity 3650
 ```
 
----
+## 🛠️ Commands & Permissions
 
-## 📡 API Documentation
+| Command           | Permission       | Default | Description              |
+|-------------------|------------------|---------|--------------------------|
+| `/statfyr reload` | `statfyr.admin`  | op      | Reload the configuration |
+| `/statfyr status` | `statfyr.admin`  | op      | Show API status and port |
 
-Interactive API documentation is available at:
-
-```
-http://your-server:8080/api/docs
-```
-
-Disable it in production with `docs.enabled: false`.
-
----
-
-## 🗂️ HTTP Status Codes
+## 📡 Status Codes
 
 | Code  | Meaning                                   |
 |-------|-------------------------------------------|
@@ -268,28 +200,33 @@ Disable it in production with `docs.enabled: false`.
 | `401` | Unauthorized (missing or invalid API key) |
 | `403` | Forbidden (IP not whitelisted)            |
 | `404` | Player or resource not found              |
+| `405` | Method not allowed (the API is GET-only)  |
 | `429` | Too many requests (rate limit exceeded)   |
 | `500` | Internal server error                     |
 
----
+## 💬 Support
 
-## 🛠️ Commands & Permissions
+- **Bugs, ideas, questions** → [GitHub Issues](https://github.com/PotenFYR-Studios/statfyr/issues); issue templates are provided, so pick the closest fit
+- **Documentation** → [statfyr.docs.potenfyr.in](https://statfyr.docs.potenfyr.in)
 
-| Command           | Permission       | Description              |
-|-------------------|------------------|--------------------------|
-| `/statfyr reload` | `statfyr.reload` | Reload the configuration |
-| `/statfyr status` | `statfyr.status` | Show API status and port |
+## 🤝 Contributing
 
----
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for how to build the plugin locally and what to include in a pull request.
 
-## 💬 Support & Community
+## 🔐 Security Policy
 
-- Comming soon!!
-
----
+Found a security vulnerability? Please **do not open a public issue**, and follow the confidential disclosure process in [SECURITY.md](SECURITY.md).
 
 ## 📜 License
 
-Statfyr is released under the [MIT License](LICENSE).
+Statfyr is licensed under the [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0) with the [Commons Clause](https://github.com/PotenFYR-Studios/statfyr/blob/master/LICENSE) condition: use, modify, fork, self-host, and redistribute it freely, including in commercial projects, but do not sell Statfyr itself. The license text in this repository is the authoritative version.
 
 ---
+
+<!-- markdownlint-disable -->
+<div align="center">
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:f97316,50:ec4899,100:8b5cf6&height=120&section=footer&text=Made%20with%20%E2%9D%A4%EF%B8%8F%20by%20PotenFYR%20Studios&fontSize=22&fontColor=ffffff&animation=twinkling" width="100%" alt="footer"/>
+
+</div>
+<!-- markdownlint-enable -->

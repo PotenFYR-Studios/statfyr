@@ -12,6 +12,14 @@
     <name>statfyr</name>
     <description>Exposes Minecraft player stats via a built-in HTTP REST API</description>
 
+    <licenses>
+        <license>
+            <name>Commons Clause License Condition v1.0 + Apache License, Version 2.0</name>
+            <url>https://github.com/PotenFYR-Studios/statfyr/blob/master/LICENSE</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
     <properties>
         <java.version>16</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -38,7 +46,7 @@
 
     <dependencies>
         <!--
-            Paper API — provided scope: never bundled into the final JAR.
+            Paper API, provided scope: never bundled into the final JAR.
             Using 1.21.1 for compilation; the plugin is backward-compatible
             to 1.16.5 because we only use stable Bukkit API surface.
         -->

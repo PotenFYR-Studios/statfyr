@@ -54,6 +54,12 @@ desktop.ini
 # =========================================
 *.tmp
 *.temp
+# =========================================
+# Docs site (Vite + Bun)
+# =========================================
+docs/dist/
+docs/node_modules/
+
 # Local agent/assistant artifacts (do not commit)
 CLAUDE.md
 .rtk
