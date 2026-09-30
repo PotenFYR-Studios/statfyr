@@ -11,6 +11,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { renderToString } from "react-dom/server";
 import { StrictMode, createElement } from "react";
 import App from "../src/App";
+import { fileURLToPath } from "node:url";
 
 type Emit = { path: string; files: string[] };
 
@@ -41,7 +42,7 @@ const win = {
 };
 (globalThis as Record<string, unknown>).window = win;
 
-const distDir = decodeURIComponent(new URL("../dist/", import.meta.url).pathname);
+const distDir = fileURLToPath(new URL("../dist/", import.meta.url));
 const MARKER = '<div id="root"></div>';
 
 let pages = 0;
