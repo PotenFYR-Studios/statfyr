@@ -12,7 +12,7 @@
 
 </div>
 
-**Statfyr** is a blazing-fast REST API plugin for Minecraft that exposes player statistics (playtime, kills, deaths, blocks mined, items crafted, movement, and more) through a clean, documented HTTP interface. Built for **Paper, Spigot, and Purpur 1.16.5–1.21.x** with zero external dependencies: dashboards, Discord bots, leaderboard sites, and analytics tools all talk to your server over plain JSON.
+**Statfyr** is a fast REST API plugin for Minecraft that exposes player statistics (playtime, kills, deaths, blocks mined, items crafted, movement analytics) through a clean, documented HTTP interface. Built for **Paper, Spigot, and Purpur 1.16.5–1.21.x** with zero external dependencies: dashboards, Discord bots, leaderboard sites, and analytics tools all talk to your server over plain JSON.
 
 Stats are read **asynchronously, off the main thread**, and served from an in-memory cache, so API traffic never touches your TPS.
 

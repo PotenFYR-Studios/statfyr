@@ -52,7 +52,7 @@ export default function Landing() {
     applyMeta({
       title: "Statfyr · REST API plugin for Minecraft server statistics",
       description:
-        "Blazing-fast REST API plugin for Minecraft exposing player statistics (kills, playtime, blocks mined and more) through a clean documented HTTP interface.",
+        "Fast REST API plugin for Minecraft exposing player statistics (kills, playtime, blocks mined, items crafted) through a clean documented HTTP interface.",
       path: "/",
     });
   }, []);

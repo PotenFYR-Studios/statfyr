@@ -20,7 +20,7 @@ const ROUTES: RouteMeta[] = [
     path: "/",
     title: "Statfyr · Minecraft REST API for Player Statistics",
     description:
-      "Blazing-fast REST API plugin for Minecraft exposing player statistics (kills, playtime, blocks mined and more) through a clean documented HTTP interface.",
+      "Fast REST API plugin for Minecraft exposing player statistics (kills, playtime, blocks mined, items crafted) through a clean documented HTTP interface.",
     jsonLd: {
       "@context": "https://schema.org",
       "@graph": [
