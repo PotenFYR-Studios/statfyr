@@ -4,16 +4,16 @@
 
 ### Bug Fixes
 
-- make changelog merge idempotent and preserve CHANGELOG intro ([aad5bf2](https://github.com/PotenFYR-Studios/statfyr/commit/aad5bf2))
+- make changelog merge idempotent and preserve CHANGELOG intro ([1971957](https://github.com/PotenFYR-Studios/statfyr/commit/1971957))
 
 ### Documentation
 
-- 1.0.0-BETA [skip ci] ([18df0ab](https://github.com/PotenFYR-Studios/statfyr/commit/18df0ab))
-- 1.0.0-BETA [skip ci] ([746e40d](https://github.com/PotenFYR-Studios/statfyr/commit/746e40d))
+- 1.0.0-BETA [skip ci] ([9a14c35](https://github.com/PotenFYR-Studios/statfyr/commit/9a14c35))
+- 1.0.0-BETA [skip ci] ([8af521b](https://github.com/PotenFYR-Studios/statfyr/commit/8af521b))
 
 ### Chores
 
-- 1.0.1-BETA ([447c2fb](https://github.com/PotenFYR-Studios/statfyr/commit/447c2fb))
+- 1.0.1-BETA ([b42e98d](https://github.com/PotenFYR-Studios/statfyr/commit/b42e98d))
 
 
 ---
@@ -24,7 +24,7 @@
 
 ### Features
 
-- Gradle migration, MC 1.8.x–26.x support, analytics platform, release CI ([ed3ac84](https://github.com/PotenFYR-Studios/statfyr/commit/ed3ac84))
+- Gradle migration, MC 1.8.x–26.x support, analytics platform, release CI ([46635ca](https://github.com/PotenFYR-Studios/statfyr/commit/46635ca))
 - redesigned OG card rendered from a committed script ([baa992c](https://github.com/PotenFYR-Studios/statfyr/commit/baa992c))
 - add Microsoft Clarity analytics and fix the Windows dist path ([0b590d0](https://github.com/PotenFYR-Studios/statfyr/commit/0b590d0))
 
