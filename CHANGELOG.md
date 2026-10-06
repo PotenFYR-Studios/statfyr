@@ -49,5 +49,8 @@
 
 ## Unreleased
 
-See [GitHub Releases](https://github.com/PotenFYR-Studios/statfyr/releases) for
-the full history, or build from source with `./gradlew build`.
+All notable changes are recorded above, newest first. The same changelog is
+published with every GitHub Release by the release workflow. The format follows
+[Keep a Changelog](https://keepachangelog.com/) and commits follow
+[Conventional Commits](https://www.conventionalcommits.org/). Build from source
+with `./gradlew build`.

@@ -29,10 +29,11 @@ fi
 STRIPPED="$(mktemp)"
 
 # Remove any existing section for this version (heading + body up to the next
-# level-2 heading). Handles both "1.2.0" and "v1.2.0" headings.
+# heading of level 1 or 2). Handles both "1.2.0" and "v1.2.0" headings, and
+# preserves any level-1 file title / intro.
 awk -v ver="${VERSION}" '
   BEGIN { skip = 0 }
-  /^## / {
+  /^#{1,2} / {
     heading = $0
     if (index(heading, "## " ver) == 1 || index(heading, "## v" ver) == 1) {
       skip = 1
