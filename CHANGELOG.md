@@ -1,3 +1,23 @@
+## 1.0.1-BETA — 2026-10-06
+
+[Full changelog](https://github.com/PotenFYR-Studios/statfyr/compare/v1.0.0-BETA...v1.0.1-BETA)
+
+### Bug Fixes
+
+- make changelog merge idempotent and preserve CHANGELOG intro ([aad5bf2](https://github.com/PotenFYR-Studios/statfyr/commit/aad5bf2))
+
+### Documentation
+
+- 1.0.0-BETA [skip ci] ([18df0ab](https://github.com/PotenFYR-Studios/statfyr/commit/18df0ab))
+- 1.0.0-BETA [skip ci] ([746e40d](https://github.com/PotenFYR-Studios/statfyr/commit/746e40d))
+
+### Chores
+
+- 1.0.1-BETA ([447c2fb](https://github.com/PotenFYR-Studios/statfyr/commit/447c2fb))
+
+
+---
+
 ## 1.0.0-BETA — 2026-10-06
 
 [Full changelog](https://github.com/PotenFYR-Studios/statfyr/commits/v1.0.0-BETA)
