@@ -2,7 +2,7 @@
 
 <img src="https://capsule-render.vercel.app/api?type=waving&color=0:8b5cf6,50:ec4899,100:f97316&height=220&section=header&text=Statfyr&fontSize=52&fontColor=ffffff&fontAlignY=34&desc=A%20blazing-fast%20REST%20API%20for%20Minecraft%20player%20statistics&descSize=20&descAlignY=55&animation=twinkling" width="100%" alt="Statfyr banner"/>
 
-[![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=20&pause=1200&color=8B5CF6&center=true&vCenter=true&width=800&lines=Every+player+statistic%2C+one+JSON+API;Live+reads+with+zero+TPS+impact;Bearer+auth%2C+rate+limits%2C+gzip+built+in;Paper+%C2%B7+Spigot+%C2%B7+Purpur+1.16.5+to+1.21.x)](https://statfyr.docs.potenfyr.in)
+[![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=20&pause=1200&color=8B5CF6&center=true&vCenter=true&width=800&lines=Every+player+statistic%2C+one+JSON+API;Live+reads+with+zero+TPS+impact;Bearer+auth%2C+rate+limits%2C+gzip+built+in;Bukkit+%C2%B7+Spigot+%C2%B7+Paper+%C2%B7+Purpur+%C2%B7+Folia+1.8.x+to+26.x)](https://statfyr.docs.potenfyr.in)
 
 [![Modrinth](https://img.shields.io/badge/Modrinth-statfyr-1bd96a?style=for-the-badge&logo=modrinth&logoColor=white&labelColor=1c1e26)](https://modrinth.com/plugin/statfyr)
 [![Docs](https://img.shields.io/badge/Docs-statfyr.docs.potenfyr.in-8b5cf6?style=for-the-badge&logo=githubpages&logoColor=white&labelColor=1c1e26)](https://statfyr.docs.potenfyr.in)
@@ -12,7 +12,7 @@
 
 </div>
 
-**Statfyr** is a fast REST API plugin for Minecraft that exposes player statistics (playtime, kills, deaths, blocks mined, items crafted, movement analytics) through a clean, documented HTTP interface. Built for **Paper, Spigot, and Purpur 1.16.5–1.21.x** with zero external dependencies: dashboards, Discord bots, leaderboard sites, and analytics tools all talk to your server over plain JSON.
+**Statfyr** is a fast REST API plugin for Minecraft that exposes player statistics (playtime, kills, deaths, blocks mined, items crafted, movement analytics) through a clean, documented HTTP interface. Built for **Bukkit, Spigot, Paper, Purpur, and Folia — Minecraft 1.8.x through 26.x** (1.8.x–1.16.x kept as legacy support) with zero external dependencies: dashboards, Discord bots, leaderboard sites, and analytics tools all talk to your server over plain JSON.
 
 Stats are read **asynchronously, off the main thread**, and served from an in-memory cache, so API traffic never touches your TPS.
 
@@ -23,9 +23,14 @@ Stats are read **asynchronously, off the main thread**, and served from an in-me
 ## ✨ Features
 
 - 📊 **Full stat access**: all nine vanilla statistic categories, live for online players and parsed from vanilla stat files for offline ones
-- 🏆 **Leaderboards**: `playtime` · `deaths` · `player_kills` · `mob_kills` · `blocks_mined` · `items_picked_up` · `items_crafted`
-- ⚡ **Async loading**: stats are fetched on background threads, zero TPS impact
-- 🗃️ **Response caching**: short-lived in-memory cache keeps repeated lookups cheap
+- 🧮 **Analytics engine**: sessions, playtime / active time / AFK time, first & last seen, derived stats (KDR, averages) and player segmentation
+- 🕒 **Historical data**: append-only, restart-safe snapshots with configurable retention — query yesterday, this week, this month or all time
+- 🏆 **Leaderboards**: 24 ranked metrics with `daily` / `weekly` / `monthly` / `all_time` periods, configurable minimums and resettable windows
+- 🗺️ **Server analytics**: peak & average concurrency, unique players, new vs returning, sessions per day, retention cohorts (D1/D7/D14/D30) and activity heatmaps
+- 🧩 **Commands & placeholders**: `/statfyr` + `/sf` with tab completion, and a full PlaceholderAPI expansion
+- 🔌 **Optional integrations** (none required): PlaceholderAPI, Vault economy analytics, Discord webhooks, Prometheus `/metrics`
+- 🧱 **Custom metrics API**: other plugins can register arbitrary metrics (economy, quests, wins, votes…) and expose them through the API
+- ⚡ **Async loading**: stats are fetched on background threads, zero TPS impact; snapshots are batched, never per-event
 - 🔐 **Bearer authentication**: lock the API behind a secret key
 - 🛡️ **Rate limiting**: per-IP throttling out of the box (120 requests / 60 s by default)
 - 🌐 **CORS support**: browser-based dashboards work without a proxy
@@ -34,13 +39,17 @@ Stats are read **asynchronously, off the main thread**, and served from an in-me
 - 📄 **Built-in API docs**: browsable endpoint reference at `/api/docs`
 - 🧩 **Pagination & sorting**: standard `limit`, `page`, and `order` params across list endpoints
 - 🗜️ **gzip compression**: automatic for clients that send `Accept-Encoding: gzip`
+- 🗃️ **Persistent, file-based storage**: no database or bundled dependency required
 
 ## 📋 Requirements
 
 | Requirement   | Version                 |
 |---------------|-------------------------|
-| Java          | 16+                     |
-| Paper/Spigot/Purpur | 1.16.5 – 1.21.x   |
+| Java          | 8+ (runs up to Java 25+) |
+| Minecraft / servers | Bukkit · Spigot · Paper · Purpur · Folia — **1.8.x – 26.x** |
+| Legacy support | 1.8.x – 1.16.x (best effort) |
+
+> A single JAR targets Java 8 bytecode, so it loads on a 1.8.x server running Java 8 *and* on a 26.x server running Java 25.
 
 ## 🚀 Quick Start
 
@@ -69,14 +78,30 @@ http://your-server:8080/api
 | Method | Endpoint                        | Description                                        |
 |--------|---------------------------------|----------------------------------------------------|
 | `GET`  | `/api`                          | API index and version                               |
-| `GET`  | `/api/health`                   | Server health, memory, and feature flags            |
+| `GET`  | `/api/health`                   | Server health, memory, platform, and feature flags  |
 | `GET`  | `/api/docs`                     | Built-in endpoint reference                         |
 | `GET`  | `/api/players`                  | Paginated player list (`limit`, `page`, `online_only`, `search`) |
 | `GET`  | `/api/player/{uuid\|name}`      | Full stats for one player                           |
 | `GET`  | `/api/player/{uuid\|name}/summary` | Lightweight movement/combat/activity summary     |
-| `GET`  | `/api/leaderboard/{stat}`       | Ranked leaderboard (`limit`, `offset`, `order`)     |
+| `GET`  | `/api/player/{uuid\|name}/history` | Historical metric snapshots (`from`, `to`, `limit`) |
+| `GET`  | `/api/player/{uuid\|name}/activity` | Activity timeline                                |
+| `GET`  | `/api/player/{uuid\|name}/sessions` | Session statistics                               |
+| `GET`  | `/api/player/{uuid\|name}/retention` | Player cohort / retention info                  |
+| `GET`  | `/api/leaderboard/{stat}`       | Ranked leaderboard (`limit`, `page`, `order`, `period`) |
+| `GET`  | `/api/server` · `/api/server/summary` | Server analytics summary                     |
+| `GET`  | `/api/server/history`           | Concurrency history (`from`, `to`, `limit`)         |
+| `GET`  | `/api/server/activity`          | Activity heatmap data                               |
+| `GET`  | `/api/server/retention`         | D1/D7/D14/D30 retention cohorts                     |
+| `GET`  | `/api/server/segments`          | Player segmentation counts                          |
+| `GET`  | `/api/network`                  | Network / multi-server aggregation                  |
+| `POST` | `/api/network/report`           | Accept a peer summary from another server           |
+| `GET`  | `/api/custom/{metric}`          | Custom metrics registered by other plugins          |
+| `GET`  | `/api/archive/{metric}`         | Archived leaderboard results for completed periods  |
+| `GET`  | `/api/server/economy`           | Economy analytics (Vault, when present)             |
+| `GET`  | `/metrics`                      | Prometheus exposition (when enabled)                |
+| `GET`  | `/dashboard`                    | Optional API-first web dashboard (when enabled)     |
 
-Valid `{stat}` values: `playtime`, `deaths`, `player_kills`, `mob_kills`, `blocks_mined`, `items_picked_up`, `items_crafted`.
+Leaderboard `{stat}` values include `kills`, `deaths`, `kdr`, `player_kills`, `mob_kills`, `damage_dealt`, `damage_taken`, `playtime`, `active_time`, `sessions`, `blocks_mined`, `blocks_broken`, `items_crafted`, `items_used`, `items_picked_up`, `items_dropped`, `chests_opened`, `jumps`, `distance_traveled`, `distance_walked`, `distance_sprinted`, `distance_swum`, `distance_flown`, `balance`. Add `?period=daily|weekly|monthly|all_time`.
 
 ### Examples
 
@@ -93,6 +118,15 @@ curl -H "Authorization: Bearer $STATFYR_API_KEY" \
 
 # Top 10 by playtime
 curl "http://localhost:8080/api/leaderboard/playtime?limit=10"
+
+# Weekly kills leaderboard
+curl "http://localhost:8080/api/leaderboard/kills?period=weekly&limit=10"
+
+# Server analytics summary
+curl "http://localhost:8080/api/server/summary"
+
+# A player's session history
+curl "http://localhost:8080/api/player/Notch/sessions"
 ```
 
 <details>
@@ -186,10 +220,96 @@ keytool -genkeypair -alias statfyr \
 
 ## 🛠️ Commands & Permissions
 
-| Command           | Permission       | Default | Description              |
-|-------------------|------------------|---------|--------------------------|
-| `/statfyr reload` | `statfyr.admin`  | op      | Reload the configuration |
-| `/statfyr status` | `statfyr.admin`  | op      | Show API status and port |
+StatFYR works with vanilla Bukkit permissions and is fully compatible with **LuckPerms** (no hard dependency).
+
+| Command | Permission | Default | Description |
+|---------|------------|---------|-------------|
+| `/statfyr stats [player]` | `statfyr.stats.self` / `statfyr.stats.others` | everyone / op | View statistics (self or another player) |
+| `/statfyr top [stat] [period]` | `statfyr.top` (or `statfyr.top.<stat>`) | everyone | View leaderboards |
+| `/statfyr help` | `statfyr.help` | everyone | Show available commands |
+| `/statfyr status` | `statfyr.status` | op | Show API + analytics status |
+| `/statfyr reload` | `statfyr.reload` | op | Reload configuration |
+| `/statfyr database` | `statfyr.admin` | op | Storage statistics |
+| `/statfyr purge <player>` | `statfyr.admin` | op | Delete a player's analytics data |
+| `/statfyr purge-history` | `statfyr.admin` | op | Delete all historical snapshots |
+| `/statfyr debug` | `statfyr.admin` | op | Dump diagnostics |
+
+`/sf` is a built-in alias for `/statfyr` (configurable under `commands.aliases`).
+
+### LuckPerms examples
+
+```bash
+/lp group default permission set statfyr.use true
+/lp group default permission set statfyr.stats true
+/lp group default permission set statfyr.top true
+/lp group moderator permission set statfyr.stats.others true
+/lp group moderator permission set statfyr.admin true
+```
+
+## 🔗 PlaceholderAPI
+
+When [PlaceholderAPI](https://www.spigotmc.org/resources/placeholderapi.6245/) is installed the `statfyr` expansion registers automatically. If it is not installed, StatFYR works normally.
+
+```text
+%statfyr_kills%              %statfyr_deaths%          %statfyr_kdr%
+%statfyr_playtime%           %statfyr_active_time%     %statfyr_afk_time%
+%statfyr_sessions%           %statfyr_blocks_mined%    %statfyr_blocks_broken%
+%statfyr_distance_traveled%  %statfyr_rank%            %statfyr_segment%
+%statfyr_first_seen%         %statfyr_last_seen%       %statfyr_afk%
+```
+
+Parameterised variants append a player name:
+
+```text
+%statfyr_kills_Steve%   %statfyr_playtime_Steve%   %statfyr_rank_Steve%
+```
+
+Server placeholders:
+
+```text
+%statfyr_server_online%          %statfyr_server_peak_today%
+%statfyr_server_peak_all_time%   %statfyr_server_unique_today%
+%statfyr_server_total_players%   %statfyr_server_sessions%
+```
+
+## 🔌 Integrations
+
+Every integration is optional and independently toggleable under `integrations:` in `config.yml`.
+
+| Integration | Purpose | Notes |
+|-------------|---------|-------|
+| **PlaceholderAPI** | In-game placeholders | Soft dependency, auto-registered |
+| **Vault** | Read-only economy analytics (balance, leaderboards) | Soft dependency, never implements an economy |
+| **Discord** | Weekly/monthly leaderboard & milestone webhooks | Plain `HttpURLConnection`, no dependency |
+| **Prometheus** | `/metrics` exposition endpoint for Grafana | Hand-rolled exposition format |
+| **Web dashboard** | Optional API-first dashboard at `/dashboard` | Consumes the public REST API only |
+| **Multi-server** | Network aggregation at `/api/network` | Push/accept peer reports; no shared database |
+
+## 📈 Custom metrics API
+
+Other plugins can push arbitrary metrics into StatFYR:
+
+```java
+Statfyr.getInstance().getAnalytics().setCustomMetric(
+    "economy.balance",
+    player.getUniqueId(),
+    12500.0
+);
+```
+
+They are then available at `GET /api/custom/economy.balance`.
+
+## 🗄️ Storage & Privacy
+
+Historical data is stored as append-only JSON Lines under `plugins/statfyr/data/` — no database or bundled driver is required. Profiles are small JSON files; snapshots are streamed and pruned according to `history.retention-days`.
+
+- Snapshots are written on a configurable interval (default 5 minutes), never per event.
+- `history.retention-days: 0` keeps data forever; otherwise old snapshots are pruned automatically.
+- Disable collection entirely with `collection.enabled: false`.
+- Exclude specific metrics with `collection.disabled-metrics`.
+- `/statfyr purge <player>` and `/statfyr purge-history` remove data on request.
+
+Only information required for Minecraft server analytics is stored.
 
 ## 📡 Status Codes
 
@@ -247,9 +367,9 @@ Contributions make the open-source community such an amazing place to learn, ins
 ## ⭐ Star History
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=potenfyr-studios/.github,potenfyr-studios/.web,potenfyr-studios/AuthCore,potenfyr-studios/Database-Eggs,potenfyr-studios/EchoingDeaths,potenfyr-studios/FYRwall,potenfyr-studios/HBS-Tool,potenfyr-studios/LinkFYR,potenfyr-studios/Minecraft-Eggs,potenfyr-studios/OrbyNode,potenfyr-studios/PteroOps-MCP,potenfyr-studios/Prog-Language-Eggs,potenfyr-studios/Shell-Eggs,potenfyr-studios/VigilFYR,potenfyr-studios/discord-botlists,potenfyr-studios/ojaj,potenfyr-studios/potenfyr-nest,potenfyr-studios/statfyr&type=Date&theme=dark" />
-  <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=potenfyr-studios/.github,potenfyr-studios/.web,potenfyr-studios/AuthCore,potenfyr-studios/Database-Eggs,potenfyr-studios/EchoingDeaths,potenfyr-studios/FYRwall,potenfyr-studios/HBS-Tool,potenfyr-studios/LinkFYR,potenfyr-studios/Minecraft-Eggs,potenfyr-studios/OrbyNode,potenfyr-studios/PteroOps-MCP,potenfyr-studios/Prog-Language-Eggs,potenfyr-studios/Shell-Eggs,potenfyr-studios/VigilFYR,potenfyr-studios/discord-botlists,potenfyr-studios/ojaj,potenfyr-studios/potenfyr-nest,potenfyr-studios/statfyr&type=Date" />
-  <img alt="Star history chart for all PotenFYR Studios public repositories" src="https://api.star-history.com/svg?repos=potenfyr-studios/.github,potenfyr-studios/.web,potenfyr-studios/AuthCore,potenfyr-studios/Database-Eggs,potenfyr-studios/EchoingDeaths,potenfyr-studios/FYRwall,potenfyr-studios/HBS-Tool,potenfyr-studios/LinkFYR,potenfyr-studios/Minecraft-Eggs,potenfyr-studios/OrbyNode,potenfyr-studios/PteroOps-MCP,potenfyr-studios/Prog-Language-Eggs,potenfyr-studios/Shell-Eggs,potenfyr-studios/VigilFYR,potenfyr-studios/discord-botlists,potenfyr-studios/ojaj,potenfyr-studios/potenfyr-nest,potenfyr-studios/statfyr&type=Date" width="80%" />
+  <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=potenfyr-studios/.github,potenfyr-studios/.web,potenfyr-studios/AuthCore,potenfyr-studios/CustomDamageNumbers,potenfyr-studios/Database-Eggs,potenfyr-studios/EchoingDeaths,potenfyr-studios/FYRwall,potenfyr-studios/HBS-Tool,potenfyr-studios/LinkFYR,potenfyr-studios/Minecraft-Eggs,potenfyr-studios/OrbyNode,potenfyr-studios/PteroOps-MCP,potenfyr-studios/Prog-Language-Eggs,potenfyr-studios/Shell-Eggs,potenfyr-studios/VigilFYR,potenfyr-studios/discord-botlists,potenfyr-studios/ojaj,potenfyr-studios/potenfyr-nest,potenfyr-studios/statfyr&type=Date&theme=dark" />
+  <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=potenfyr-studios/.github,potenfyr-studios/.web,potenfyr-studios/AuthCore,potenfyr-studios/CustomDamageNumbers,potenfyr-studios/Database-Eggs,potenfyr-studios/EchoingDeaths,potenfyr-studios/FYRwall,potenfyr-studios/HBS-Tool,potenfyr-studios/LinkFYR,potenfyr-studios/Minecraft-Eggs,potenfyr-studios/OrbyNode,potenfyr-studios/PteroOps-MCP,potenfyr-studios/Prog-Language-Eggs,potenfyr-studios/Shell-Eggs,potenfyr-studios/VigilFYR,potenfyr-studios/discord-botlists,potenfyr-studios/ojaj,potenfyr-studios/potenfyr-nest,potenfyr-studios/statfyr&type=Date" />
+  <img alt="Star history chart for all PotenFYR Studios public repositories" src="https://api.star-history.com/svg?repos=potenfyr-studios/.github,potenfyr-studios/.web,potenfyr-studios/AuthCore,potenfyr-studios/CustomDamageNumbers,potenfyr-studios/Database-Eggs,potenfyr-studios/EchoingDeaths,potenfyr-studios/FYRwall,potenfyr-studios/HBS-Tool,potenfyr-studios/LinkFYR,potenfyr-studios/Minecraft-Eggs,potenfyr-studios/OrbyNode,potenfyr-studios/PteroOps-MCP,potenfyr-studios/Prog-Language-Eggs,potenfyr-studios/Shell-Eggs,potenfyr-studios/VigilFYR,potenfyr-studios/discord-botlists,potenfyr-studios/ojaj,potenfyr-studios/potenfyr-nest,potenfyr-studios/statfyr&type=Date" width="80%" />
 </picture>
 
 Every public PotenFYR Studios repository on one live chart, served by [star-history.com](https://star-history.com).

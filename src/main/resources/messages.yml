@@ -1,0 +1,75 @@
+# =========================================================
+# StatFYR — messages
+# =========================================================
+#
+# Colour codes use '&' (for example &6 = gold).
+# Placeholders use {name} and are filled in by the plugin.
+# =========================================================
+
+prefix: "&8[&6StatFYR&8] &r"
+
+no-permission: "&cYou do not have permission to do that."
+players-only: "&cThis command can only be run by a player."
+player-not-found: "&cPlayer not found: &f{player}"
+unknown-subcommand: "&cUnknown subcommand. Try &f/statfyr help&c."
+invalid-stat: "&cUnknown statistic: &f{stat}"
+invalid-period: "&cUnknown period: &f{period}&c. Use daily, weekly, monthly or alltime."
+
+# ---------------------------------------------------------
+# /statfyr stats
+# ---------------------------------------------------------
+stats-header: "&6&lStatFYR &7— &f{player}"
+stats-line: "&7{key}: &f{value}"
+stats-combat: "&6Combat"
+stats-kills: "Kills"
+stats-deaths: "Deaths"
+stats-kdr: "K/D"
+stats-activity: "&6Activity"
+stats-playtime: "Playtime"
+stats-active-time: "Active Time"
+stats-afk-time: "AFK Time"
+stats-sessions: "Sessions"
+stats-mining: "&6Mining"
+stats-blocks-mined: "Blocks Mined"
+stats-crafted: "Items Crafted"
+stats-first-seen: "First Seen"
+stats-last-seen: "Last Seen"
+stats-segment: "Segment"
+stats-none: "&7No statistics recorded for &f{player}&7 yet."
+
+# ---------------------------------------------------------
+# /statfyr top
+# ---------------------------------------------------------
+top-header: "&6&lTop {stat} &7({period})"
+top-line: "&e{rank}. &f{player} &7— &a{value}"
+top-empty: "&7No entries for &f{stat}&7 yet."
+top-usage: "&7Usage: &f/statfyr top <stat> [daily|weekly|monthly|alltime]"
+
+# ---------------------------------------------------------
+# /statfyr help
+# ---------------------------------------------------------
+help-header: "&6&lStatFYR &7— &fCommands"
+help-line: "&e{usage} &7— &f{description}"
+help-footer: "&7Docs: &fhttps://statfyr.docs.potenfyr.in"
+
+# ---------------------------------------------------------
+# /statfyr status
+# ---------------------------------------------------------
+status-header: "&6&lStatFYR Status"
+status-line: "&7{key}: &f{value}"
+status-running: "running"
+status-stopped: "stopped"
+
+# ---------------------------------------------------------
+# /statfyr reload
+# ---------------------------------------------------------
+reloaded: "&aStatFYR reloaded."
+reload-failed: "&cStatFYR reload failed. Check the console for details."
+
+# ---------------------------------------------------------
+# Admin
+# ---------------------------------------------------------
+database-header: "&6&lStatFYR Storage"
+purge-done: "&aPurged data for &f{player}&a."
+purge-history-done: "&aPurged all historical snapshots and activity."
+debug-header: "&6&lStatFYR Debug"

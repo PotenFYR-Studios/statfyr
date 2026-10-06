@@ -182,3 +182,163 @@ cache:
 
   # Cache refresh interval
   refresh-seconds: 10
+
+# =========================================================
+# DATA COLLECTION
+# =========================================================
+collection:
+
+  # Master switch for background analytics collection
+  enabled: true
+
+  # How often online players are snapshotted into history (seconds).
+  # Snapshots are appended to an append-only JSONL file, never a DB write
+  # per event.
+  snapshot-interval-seconds: 300
+
+  # Track join/leave sessions (first seen, last seen, durations)
+  session-tracking: true
+
+  # Record a lightweight player activity timeline
+  activity-timeline: true
+
+  # AFK detection
+  afk:
+    enabled: true
+    # Seconds of no movement/commands before a player counts as AFK
+    threshold-seconds: 300
+
+  # Privacy: metrics that should NOT be collected.
+  # Example: [ "damage_dealt", "damage_taken" ]
+  disabled-metrics: []
+
+# =========================================================
+# HISTORY / RETENTION
+# =========================================================
+history:
+
+  # Enable persistent historical snapshots
+  enabled: true
+
+  # How long snapshots are kept.
+  #   0   = unlimited
+  #   30  = 30 days
+  #   365 = one year
+  retention-days: 365
+
+# =========================================================
+# LEADERBOARDS
+# =========================================================
+leaderboards:
+
+  # Default period when none is supplied: daily | weekly | monthly | all_time
+  default-period: all_time
+
+  # Weekly reset (day + hour, server time)
+  weekly-reset-day: MONDAY
+  weekly-reset-hour: 0
+
+  # Monthly reset day of month
+  monthly-reset-day: 1
+
+  # Minimum values required to appear on a leaderboard
+  minimums:
+    kdr:
+      # Players need at least this many kills to rank on KDR
+      kills: 10
+
+# =========================================================
+# INTEGRATIONS (all optional and independent)
+# =========================================================
+integrations:
+
+  # PlaceholderAPI expansion
+  placeholderapi:
+    enabled: true
+
+  # Vault economy analytics (read-only)
+  vault:
+    enabled: true
+
+  # Discord webhook notifications
+  discord:
+    enabled: false
+    webhook-url: ""
+    # Minimum number of players for the peak milestone notification
+    peak-milestone: 100
+    events:
+      weekly-leaderboard: true
+      monthly-leaderboard: true
+      peak-milestone: true
+      new-player: false
+      server-status: false
+
+  # Prometheus /metrics exposition endpoint
+  prometheus:
+    enabled: false
+
+  # Lightweight, API-first web dashboard served at /dashboard.
+  # It consumes the same public REST API (enter your API key in the page).
+  dashboard:
+    enabled: false
+
+# =========================================================
+# NETWORK / MULTI-SERVER
+# =========================================================
+network:
+
+  # Unique id for this server in a network (used by /api/network)
+  server-id: "server-1"
+
+  # Friendly name shown in network aggregation
+  server-name: "Survival"
+
+  # Optional: push this server's summary to a StatFYR hub.
+  # Blank disables pushing. Example: "http://hub.example.com:8080"
+  hub-url: ""
+
+  # Shared secret used both when pushing and when accepting reports.
+  # Sent/received in the X-StatFYR-Key header.
+  report-key: ""
+
+  # Accept reports from other servers at POST /api/network/report
+  accept-reports: true
+
+  # How often to push to the hub (seconds)
+  report-interval-seconds: 60
+
+  # How long a received report stays valid (seconds)
+  report-ttl-seconds: 180
+
+# =========================================================
+# MILESTONES
+# =========================================================
+milestones:
+
+  enabled: true
+
+  # Broadcast milestones to the whole server
+  broadcast: true
+
+  # Player milestones (hours of playtime)
+  playtime-hours: [ 10, 100 ]
+
+  # Player milestones (kills)
+  kills: [ 100 ]
+
+  # Player milestones (blocks mined)
+  blocks-mined: [ 1000 ]
+
+  # Server milestones (unique players)
+  unique-players: [ 100, 1000 ]
+
+  # Server milestones (peak concurrent players)
+  peak-players: [ 100 ]
+
+# =========================================================
+# COMMANDS
+# =========================================================
+commands:
+
+  # Aliases for /statfyr (the bundled plugin.yml already provides /sf)
+  aliases: [ sf ]

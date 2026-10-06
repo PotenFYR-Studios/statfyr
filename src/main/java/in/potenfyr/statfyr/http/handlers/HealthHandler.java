@@ -3,6 +3,7 @@ package in.potenfyr.statfyr.http.handlers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import in.potenfyr.statfyr.Statfyr;
+import in.potenfyr.statfyr.compat.ServerVersion;
 import in.potenfyr.statfyr.config.ConfigManager;
 import in.potenfyr.statfyr.util.JsonBuilder;
 import in.potenfyr.statfyr.util.ResponseUtil;
@@ -201,6 +202,31 @@ public final class HealthHandler implements HttpHandler {
                             .add(
                                     "bukkit_version",
                                     Bukkit.getBukkitVersion()
+                            )
+
+                            /*
+                             * Server flavour, e.g. "Paper 26.3".
+                             */
+                            .add(
+                                    "platform",
+                                    ServerVersion.getPlatformLabel()
+                            )
+
+                            /*
+                             * Whether the server is in the legacy range
+                             * (1.8.x - 1.16.x).
+                             */
+                            .add(
+                                    "legacy",
+                                    ServerVersion.isLegacy()
+                            )
+
+                            /*
+                             * Folia uses a regionised scheduler.
+                             */
+                            .add(
+                                    "folia",
+                                    ServerVersion.isFolia()
                             );
 
             // -----------------------------------------------------------------

@@ -5,7 +5,7 @@ import { Callout, CodeBlock } from "../components/ui";
 
 const TOC = [
   { id: "config", label: "The config.yml" },
-  { id: "endpoints", label: "All 7 endpoints, in order" },
+  { id: "endpoints", label: "Endpoint walkthrough" },
   { id: "fetch", label: "Fetch it from JavaScript" },
   { id: "commands", label: "Manage it in game" },
   { id: "next", label: "Go deeper" },
@@ -16,7 +16,7 @@ export default function ExamplesSetup() {
     applyMeta({
       title: "Examples · Statfyr",
       description:
-        "Ready-to-paste Statfyr examples: a hardened config.yml (API key, HTTPS, CORS) and curl walkthroughs of all 7 REST endpoints.",
+        "Ready-to-paste Statfyr examples: a hardened config.yml (API key, HTTPS, CORS) and curl walkthroughs of every REST endpoint.",
       path: "/examples",
     });
   }, []);
@@ -81,7 +81,7 @@ http:
         for the day it is wired up.
       </Callout>
 
-      <h2 id="endpoints">All 7 endpoints, in order</h2>
+      <h2 id="endpoints">Endpoint walkthrough</h2>
       <p>
         With <code>enable-api-key: true</code>, every route requires the header, including{" "}
         <code>/api/health</code> included. Requests are GET-only (anything else answers{" "}
@@ -93,26 +93,35 @@ http:
         code={`BASE="http://127.0.0.1:8080"
 KEY="GENERATE_ME"
 
-# 1) API index: name, version, docs pointer
+# API index and self-describing endpoint list
 curl -s -H "Authorization: Bearer $KEY" "$BASE/api"
-
-# 2) Self-describing endpoint list
 curl -s -H "Authorization: Bearer $KEY" "$BASE/api/docs"
 
-# 3) Health check
+# Health and player roster
 curl -s -H "Authorization: Bearer $KEY" "$BASE/api/health"
-
-# 4) Every tracked player (online ones only)
 curl -s -H "Authorization: Bearer $KEY" "$BASE/api/players?online_only=true"
 
-# 5) Full stats for one player, by name or UUID
+# Full stats and computed summary for one player
 curl -s -H "Authorization: Bearer $KEY" "$BASE/api/player/Notch"
+curl -s -H "Authorization: Bearer $KEY" "$BASE/api/player/Notch/summary"
 
-# 6) The same player as a computed summary
-curl -s -H "Authorization: Bearer $KEY" "$BASE/api/player/069a79f4-44e9-4726-a5be-fca90e38aaf5/summary"
+# Sessions, history and activity timeline
+curl -s -H "Authorization: Bearer $KEY" "$BASE/api/player/Notch/sessions"
+curl -s -H "Authorization: Bearer $KEY" "$BASE/api/player/Notch/history?from=7d"
+curl -s -H "Authorization: Bearer $KEY" "$BASE/api/player/Notch/activity?from=7d"
 
-# 7) Leaderboard: playtime, deaths, player_kills, mob_kills, blocks_mined, items_picked_up, items_crafted
-curl -s -H "Authorization: Bearer $KEY" "$BASE/api/leaderboard/playtime?limit=5"`}
+# Leaderboards (all-time and weekly)
+curl -s -H "Authorization: Bearer $KEY" "$BASE/api/leaderboard/kills?limit=5"
+curl -s -H "Authorization: Bearer $KEY" "$BASE/api/leaderboard/kills?period=weekly&limit=5"
+
+# Server analytics, retention and heatmaps
+curl -s -H "Authorization: Bearer $KEY" "$BASE/api/server/summary"
+curl -s -H "Authorization: Bearer $KEY" "$BASE/api/server/retention"
+curl -s -H "Authorization: Bearer $KEY" "$BASE/api/server/activity"
+
+# Archived weekly leaderboards and network shape
+curl -s -H "Authorization: Bearer $KEY" "$BASE/api/archive/kills?period=weekly"
+curl -s -H "Authorization: Bearer $KEY" "$BASE/api/network"`}
       />
       <Callout kind="note">
         A missing or wrong key answers <code>401</code>; tripping the 120-requests-per-60-seconds
@@ -141,19 +150,41 @@ const top = await statfyr("/api/leaderboard/playtime?limit=10");`}
 
       <h2 id="commands">Manage it in game</h2>
       <p>
-        Both commands need the <code>statfyr.admin</code> permission (default: operator):
+        Admin commands need <code>statfyr.admin</code> (or the granular{" "}
+        <code>statfyr.reload</code> / <code>statfyr.status</code>); player commands are available to
+        everyone by default:
       </p>
       <CodeBlock
         lang="text"
-        code={`/statfyr reload   # re-read config.yml and restart the embedded HTTP server
-/statfyr status   # current runtime status`}
+        code={`/statfyr stats [player]   # view statistics
+/statfyr top [stat] [period]  # leaderboards
+/statfyr help             # list commands
+/statfyr reload           # re-read config and restart the HTTP server
+/statfyr status           # current runtime status
+/statfyr database         # storage statistics`}
       />
+      <p>See <Link to="/docs/commands">Commands &amp; Permissions</Link> for the full list.</p>
 
       <h2 id="next">Go deeper</h2>
       <ul>
         <li>
           <Link to="/docs/api">API reference</Link>: every endpoint's parameters, response fields,
           and error shapes.
+        </li>
+        <li>
+          <Link to="/docs/commands">Commands &amp; Permissions</Link>: the full command and
+          permission surface, plus LuckPerms examples.
+        </li>
+        <li>
+          <Link to="/docs/placeholders">PlaceholderAPI</Link>: player and server placeholders.
+        </li>
+        <li>
+          <Link to="/docs/integrations">Integrations</Link>: Vault, Discord, Prometheus, the
+          dashboard and the custom metrics API.
+        </li>
+        <li>
+          <Link to="/docs/analytics">Analytics &amp; History</Link>: sessions, history, retention
+          and segmentation.
         </li>
         <li>
           <Link to="/docs/examples">Integration examples</Link>: a live dashboard, a paginated

@@ -1,0 +1,193 @@
+/*
+ * =============================================================================
+ * Statfyr — Gradle build
+ * =============================================================================
+ *
+ * Migrated from Maven. Build with:
+ *
+ *   ./gradlew build        # compile + jar
+ *   ./gradlew clean jar    # just the plugin JAR
+ *
+ * Output: build/libs/Statfyr-<version>.jar
+ *
+ * The resulting JAR contains ZERO runtime dependencies (the embedded HTTP
+ * server and JSON writer are part of the JDK / this codebase) and targets
+ * Java 8 bytecode for maximum server compatibility.
+ * =============================================================================
+ */
+
+plugins {
+    id 'java'
+    id 'maven-publish'
+}
+
+group = providers.gradleProperty('group').get()
+version = providers.gradleProperty('version').get()
+
+description = 'Exposes Minecraft player statistics via a built-in HTTP REST API'
+
+// -----------------------------------------------------------------------------
+// Repositories
+// -----------------------------------------------------------------------------
+repositories {
+    mavenCentral()
+
+    // PaperMC hosts Paper API, Spigot API and their transitive dependencies.
+    maven {
+        name = 'papermc'
+        url = 'https://repo.papermc.io/repository/maven-public/'
+    }
+
+    // Some legacy Spigot/Paper transitive dependencies (bungeecord-chat etc.)
+    // only live on Sonatype snapshots.
+    maven {
+        name = 'sonatype'
+        url = 'https://oss.sonatype.org/content/repositories/snapshots/'
+    }
+
+    // Fallback for older Spigot API artifacts.
+    maven {
+        name = 'spigot'
+        url = 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/'
+    }
+
+    // PlaceholderAPI (compile-only, optional at runtime).
+    maven {
+        name = 'placeholderapi'
+        url = 'https://repo.extendedclip.com/releases/'
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Dependencies
+// -----------------------------------------------------------------------------
+dependencies {
+    /*
+     * Bukkit/Paper API is provided by the server at runtime and must never be
+     * bundled. Pinned to the oldest supported API on purpose — see
+     * settings.gradle for the rationale.
+     */
+    compileOnly "com.destroystokyo.paper:paper-api:${providers.gradleProperty('paperApiVersion').get()}"
+
+    // JetBrains nullability annotations used across the codebase.
+    compileOnly 'org.jetbrains:annotations:24.1.0'
+
+    // Optional integrations — compile only, never bundled. Loaded lazily via
+    // reflection so the plugin works when these plugins are absent.
+    compileOnly 'me.clip:placeholderapi:2.11.7'
+
+    // Unit tests (none yet, but keeps the test source set working).
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.10.2'
+    // Gson is provided by the server at runtime; tests need it directly.
+    testImplementation 'com.google.code.gson:gson:2.10.1'
+}
+
+// -----------------------------------------------------------------------------
+// Java / compiler configuration
+// -----------------------------------------------------------------------------
+java {
+    // No toolchain: Statfyr intentionally emits Java 8 bytecode regardless of
+    // the JDK running the build, so 1.8.x servers (Java 8) can load it too.
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+
+    withSourcesJar()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    // Emit Java 8 bytecode while compiling against a modern JDK.
+    options.release = providers.gradleProperty('javaRelease').get().toInteger()
+    // Silence "source value 8 is obsolete" warnings from newer JDKs.
+    options.compilerArgs += ['-Xlint:-options']
+}
+
+tasks.withType(Javadoc).configureEach {
+    options.encoding = 'UTF-8'
+    options.addStringOption('Xdoclint:none', '-quiet')
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+// -----------------------------------------------------------------------------
+// Resources — expand plugin.yml placeholders from gradle.properties
+// -----------------------------------------------------------------------------
+processResources {
+    // Capture templating values at configuration time (accessing `project`
+    // from the execution-time closure is deprecated in Gradle 9+).
+    def templateValues = [
+            version     : project.version.toString(),
+            pluginName  : providers.gradleProperty('pluginName').get(),
+            pluginMain  : providers.gradleProperty('pluginMain').get(),
+            apiVersion  : providers.gradleProperty('pluginApiVersion').get(),
+            author      : providers.gradleProperty('pluginAuthor').get(),
+            website     : providers.gradleProperty('pluginWebsite').get(),
+            description : providers.gradleProperty('pluginDescription').get()
+    ]
+
+    // Only plugin.yml is templated. Binary assets (PNGs) and config.yml are
+    // copied verbatim.
+    filesMatching('plugin.yml') {
+        expand(templateValues)
+    }
+
+    // Make builds reproducible.
+    filteringCharset = 'UTF-8'
+}
+
+// -----------------------------------------------------------------------------
+// JAR
+// -----------------------------------------------------------------------------
+tasks.named('jar', Jar) {
+    archiveBaseName = 'Statfyr'
+    archiveVersion = project.version
+    archiveClassifier = ''
+
+    manifest {
+        attributes(
+                'Implementation-Title'     : 'Statfyr',
+                'Implementation-Version'   : project.version,
+                'Implementation-Vendor'    : 'PotenFYR Studios',
+                'Specification-Title'      : 'Statfyr',
+                'Specification-Version'    : project.version,
+                'Built-With-JDK'           : System.getProperty('java.version'),
+                'Bukkit-Compatible'        : '1.8.x-26.x'
+        )
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Convenience: `./gradlew buildRelease` prints the artifact path.
+// -----------------------------------------------------------------------------
+def releaseJar = tasks.named('jar', Jar).flatMap { it.archiveFile }
+
+tasks.register('buildRelease') {
+    group = 'build'
+    description = 'Builds the release plugin JAR and prints its path.'
+    dependsOn tasks.named('clean')
+    dependsOn tasks.named('jar')
+    doLast {
+        println "Release artifact: ${releaseJar.get().asFile}"
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Publishing (local maven repo) — optional, useful for testing consumers.
+// -----------------------------------------------------------------------------
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+            artifactId = 'statfyr'
+        }
+    }
+    repositories {
+        maven {
+            name = 'localRepo'
+            url = layout.buildDirectory.dir('repo')
+        }
+    }
+}

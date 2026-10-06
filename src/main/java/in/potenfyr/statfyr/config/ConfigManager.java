@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -54,7 +55,9 @@ public final class ConfigManager {
      *
      * <p>If any of these keys are missing, the config is considered invalid.
      */
-    private static final List<String> REQUIRED_PATHS = List.of(
+    private static final List<String> REQUIRED_PATHS =
+            Collections.unmodifiableList(
+                    Arrays.asList(
 
             "config-version",
 
@@ -71,7 +74,7 @@ public final class ConfigManager {
             "pagination.default-limit",
 
             "async.enabled"
-    );
+    ));
 
     // =========================================================================
     // CORE
@@ -996,7 +999,7 @@ public final class ConfigManager {
 
         return enableApiKey
                 && apiKey != null
-                && !apiKey.isBlank();
+                && !apiKey.trim().isEmpty();
     }
 
     /**

@@ -176,6 +176,15 @@ public final class JsonBuilder {
             );
         }
 
+        if (value instanceof java.util.Collection) {
+
+            return serializeArray(
+                    new java.util.ArrayList<Object>(
+                            (java.util.Collection<?>) value
+                    )
+            );
+        }
+
         if (value instanceof List) {
 
             return serializeArray(

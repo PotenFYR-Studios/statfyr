@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>StatFYR Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1117; --panel: #171a23; --panel2: #1e2230;
+    --text: #e6e8ee; --muted: #8b90a0; --accent: #8b5cf6;
+    --accent2: #ec4899; --ok: #22c55e; --border: #262a37;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 14px 20px; border-bottom: 1px solid var(--border);
+    background: linear-gradient(90deg, rgba(139,92,246,.15), rgba(236,72,153,.10));
+  }
+  header h1 { margin: 0; font-size: 18px; letter-spacing: .3px; }
+  header .spacer { flex: 1; }
+  input, select, button {
+    background: var(--panel2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 7px 10px; font: inherit; outline: none;
+  }
+  button { cursor: pointer; background: var(--accent); border-color: transparent; font-weight: 600; }
+  button:hover { filter: brightness(1.1); }
+  main { padding: 20px; max-width: 1200px; margin: 0 auto; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .card .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+  .card .value { font-size: 24px; font-weight: 700; margin-top: 4px; }
+  section { margin-top: 24px; }
+  section h2 { font-size: 15px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }
+  tr:last-child td { border-bottom: none; }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .status { color: var(--muted); font-size: 12px; }
+  .status.err { color: #f87171; }
+  .ok { color: var(--ok); }
+</style>
+</head>
+<body>
+<header>
+  <h1>📊 StatFYR</h1>
+  <span class="status" id="status">ready</span>
+  <span class="spacer"></span>
+  <input id="base" size="24" placeholder="API base URL" />
+  <input id="key" type="password" size="20" placeholder="API key (optional)" />
+  <button id="save">Save</button>
+  <button id="refresh">Refresh</button>
+</header>
+
+<main>
+  <div class="cards" id="cards"></div>
+
+  <section>
+    <h2>Leaderboards</h2>
+    <div class="controls">
+      <select id="metric">
+        <option value="kills">Kills</option>
+        <option value="deaths">Deaths</option>
+        <option value="kdr">K/D</option>
+        <option value="playtime">Playtime</option>
+        <option value="active_time">Active Time</option>
+        <option value="sessions">Sessions</option>
+        <option value="blocks_mined">Blocks Mined</option>
+        <option value="items_crafted">Items Crafted</option>
+        <option value="distance_traveled">Distance</option>
+      </select>
+      <select id="period">
+        <option value="all_time">All time</option>
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+        <option value="monthly">Monthly</option>
+      </select>
+      <button id="loadboard">Load</button>
+    </div>
+    <table>
+      <thead><tr><th>#</th><th>Player</th><th>Value</th></tr></thead>
+      <tbody id="board"><tr><td colspan="3" class="status">No data.</td></tr></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Retention</h2>
+    <table>
+      <thead><tr><th>Cohort</th><th>Rate</th></tr></thead>
+      <tbody id="retention"><tr><td colspan="2" class="status">No data.</td></tr></tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+(function () {
+  var baseEl = document.getElementById('base');
+  var keyEl = document.getElementById('key');
+  var statusEl = document.getElementById('status');
+
+  baseEl.value = localStorage.getItem('statfyr.base') || window.location.origin;
+  keyEl.value = localStorage.getItem('statfyr.key') || '';
+
+  document.getElementById('save').onclick = function () {
+    localStorage.setItem('statfyr.base', baseEl.value.replace(/\/$/, ''));
+    localStorage.setItem('statfyr.key', keyEl.value);
+    setStatus('saved');
+  };
+  document.getElementById('refresh').onclick = refresh;
+  document.getElementById('loadboard').onclick = loadBoard;
+  document.getElementById('metric').onchange = loadBoard;
+  document.getElementById('period').onchange = loadBoard;
+
+  function setStatus(text, err) {
+    statusEl.textContent = text;
+    statusEl.className = 'status' + (err ? ' err' : '');
+  }
+
+  function api(path) {
+    var base = baseEl.value.replace(/\/$/, '');
+    var headers = {};
+    if (keyEl.value) { headers['Authorization'] = 'Bearer ' + keyEl.value; }
+    return fetch(base + path, { headers: headers }).then(function (r) {
+      if (!r.ok) { throw new Error('HTTP ' + r.status); }
+      return r.json();
+    });
+  }
+
+  function card(label, value) {
+    return '<div class="card"><div class="label">' + label +
+           '</div><div class="value">' + value + '</div></div>';
+  }
+
+  function num(v) { return (v === undefined || v === null) ? '—' : Number(v).toLocaleString(); }
+
+  function refresh() {
+    setStatus('loading…');
+    api('/api/server/summary').then(function (s) {
+      document.getElementById('cards').innerHTML =
+        card('Online', num(s.online)) +
+        card('Peak Today', num(s.peak_today)) +
+        card('Peak All Time', num(s.peak_all_time)) +
+        card('Unique Today', num(s.unique_players_today)) +
+        card('Unique This Week', num(s.unique_players_week)) +
+        card('Total Players', num(s.total_players)) +
+        card('Sessions', num(s.sessions_total)) +
+        card('Avg Session', fmtSeconds(s.average_session_seconds));
+      setStatus('updated ' + new Date().toLocaleTimeString());
+    }).catch(function (e) { setStatus('error: ' + e.message, true); });
+
+    api('/api/server/retention').then(function (r) {
+      var rows = ['d1', 'd7', 'd14', 'd30'].map(function (k) {
+        var pct = (r[k] === undefined) ? '—' : (r[k] * 100).toFixed(1) + '%';
+        return '<tr><td>' + k.toUpperCase() + '</td><td>' + pct + '</td></tr>';
+      }).join('');
+      document.getElementById('retention').innerHTML = rows;
+    }).catch(function () {});
+  }
+
+  function loadBoard() {
+    var metric = document.getElementById('metric').value;
+    var period = document.getElementById('period').value;
+    setStatus('loading leaderboard…');
+    api('/api/leaderboard/' + metric + '?period=' + period + '&limit=25')
+      .then(function (data) {
+        var rows = (data.entries || []).map(function (e) {
+          return '<tr><td>' + e.rank + '</td><td>' + e.name +
+                 (e.online ? ' <span class="ok">●</span>' : '') +
+                 '</td><td>' + (e.formatted !== undefined ? e.formatted : num(e.value)) +
+                 '</td></tr>';
+        }).join('');
+        document.getElementById('board').innerHTML =
+          rows || '<tr><td colspan="3" class="status">No data.</td></tr>';
+        setStatus('updated ' + new Date().toLocaleTimeString());
+      }).catch(function (e) { setStatus('error: ' + e.message, true); });
+  }
+
+  function fmtSeconds(s) {
+    if (!s) { return '0m'; }
+    s = Math.round(s);
+    var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+    return (h > 0 ? h + 'h ' : '') + m + 'm';
+  }
+
+  refresh();
+  loadBoard();
+  setInterval(refresh, 30000);
+})();
+</script>
+</body>
+</html>

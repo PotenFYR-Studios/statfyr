@@ -7,6 +7,7 @@ const TOC = [
   { id: "file-location", label: "File location" },
   { id: "full-example", label: "Full example" },
   { id: "key-reference", label: "Key reference" },
+  { id: "analytics", label: "Analytics & integrations" },
   { id: "environment-overrides", label: "Environment overrides" },
   { id: "https-setup", label: "HTTPS setup" },
   { id: "pending-keys", label: "Reserved keys" },
@@ -97,7 +98,66 @@ sorting:
 
 cache:
   ttl-seconds: 60
-  refresh-seconds: 10`}
+  refresh-seconds: 10
+
+collection:
+  enabled: true
+  snapshot-interval-seconds: 300
+  session-tracking: true
+  activity-timeline: true
+  afk:
+    enabled: true
+    threshold-seconds: 300
+  disabled-metrics: []
+
+history:
+  enabled: true
+  retention-days: 365        # 0 = unlimited
+
+leaderboards:
+  default-period: all_time   # daily | weekly | monthly | all_time
+  weekly-reset-day: MONDAY
+  weekly-reset-hour: 0
+  monthly-reset-day: 1
+  minimums:
+    kdr:
+      kills: 10
+
+integrations:
+  placeholderapi:
+    enabled: true
+  vault:
+    enabled: true
+  discord:
+    enabled: false
+    webhook-url: ""
+    peak-milestone: 100
+    events:
+      weekly-leaderboard: true
+      monthly-leaderboard: true
+      peak-milestone: true
+      new-player: false
+      server-status: false
+  prometheus:
+    enabled: false
+  dashboard:
+    enabled: false
+
+network:
+  server-id: "server-1"
+  server-name: "Survival"
+
+milestones:
+  enabled: true
+  broadcast: true
+  playtime-hours: [ 10, 100 ]
+  kills: [ 100 ]
+  blocks-mined: [ 1000 ]
+  unique-players: [ 100, 1000 ]
+  peak-players: [ 100 ]
+
+commands:
+  aliases: [ sf ]`}
       />
 
       <h2 id="key-reference">Key reference</h2>
@@ -138,6 +198,51 @@ cache:
             <tr><td><code>sorting.default-order</code></td><td>desc</td><td>Enforced</td><td>Default sort direction when <code>order</code> is omitted.</td></tr>
             <tr><td><code>cache.ttl-seconds</code></td><td>60</td><td>Reserved</td><td>Loaded but unused; the statistic cache TTL is hard-coded at 30 seconds.</td></tr>
             <tr><td><code>cache.refresh-seconds</code></td><td>10</td><td>Reserved</td><td>Loaded but unused; the background refresh runs every 5 seconds.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="analytics">Analytics & integrations</h2>
+      <p>
+        These keys drive the analytics engine and optional integrations. All of them are
+        <strong>enforced</strong>; every integration is independent and safe to leave disabled.
+      </p>
+      <div className="table-scroll">
+        <table className="doc-table">
+          <thead>
+            <tr><th>Key</th><th>Default</th><th>Behavior</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>collection.enabled</code></td><td>true</td><td>Master switch for background analytics collection.</td></tr>
+            <tr><td><code>collection.snapshot-interval-seconds</code></td><td>300</td><td>How often online players are snapshotted into history (minimum 30s).</td></tr>
+            <tr><td><code>collection.session-tracking</code></td><td>true</td><td>Track join/leave sessions, first/last seen and durations.</td></tr>
+            <tr><td><code>collection.activity-timeline</code></td><td>true</td><td>Record a lightweight activity timeline.</td></tr>
+            <tr><td><code>collection.afk.enabled</code></td><td>true</td><td>Enable AFK detection for active/AFK time split.</td></tr>
+            <tr><td><code>collection.afk.threshold-seconds</code></td><td>300</td><td>Inactivity before a player counts as AFK.</td></tr>
+            <tr><td><code>collection.disabled-metrics</code></td><td>[]</td><td>Metrics that are never collected (privacy).</td></tr>
+            <tr><td><code>history.enabled</code></td><td>true</td><td>Persist historical snapshots.</td></tr>
+            <tr><td><code>history.retention-days</code></td><td>365</td><td>Retention window; <code>0</code> keeps data forever.</td></tr>
+            <tr><td><code>leaderboards.default-period</code></td><td>all_time</td><td>Default period for leaderboards and <code>/statfyr top</code>.</td></tr>
+            <tr><td><code>leaderboards.weekly-reset-day</code></td><td>MONDAY</td><td>Weekly reset day (server time).</td></tr>
+            <tr><td><code>leaderboards.weekly-reset-hour</code></td><td>0</td><td>Weekly reset hour.</td></tr>
+            <tr><td><code>leaderboards.monthly-reset-day</code></td><td>1</td><td>Monthly reset day of month.</td></tr>
+            <tr><td><code>leaderboards.minimums.kdr.kills</code></td><td>10</td><td>Minimum kills required to rank on the KDR leaderboard.</td></tr>
+            <tr><td><code>integrations.placeholderapi.enabled</code></td><td>true</td><td>Register the PlaceholderAPI expansion when present.</td></tr>
+            <tr><td><code>integrations.vault.enabled</code></td><td>true</td><td>Read-only Vault economy analytics when present.</td></tr>
+            <tr><td><code>integrations.discord.enabled</code></td><td>false</td><td>Enable Discord webhook notifications.</td></tr>
+            <tr><td><code>integrations.discord.webhook-url</code></td><td>(empty)</td><td>Discord webhook URL.</td></tr>
+            <tr><td><code>integrations.discord.events.*</code></td><td>varies</td><td>Per-event toggles (weekly/monthly leaderboard, peak, new player, status).</td></tr>
+            <tr><td><code>integrations.prometheus.enabled</code></td><td>false</td><td>Expose the Prometheus <code>/metrics</code> endpoint.</td></tr>
+            <tr><td><code>integrations.dashboard.enabled</code></td><td>false</td><td>Serve the optional API-first web dashboard at <code>/dashboard</code>.</td></tr>
+            <tr><td><code>network.server-id</code></td><td>server-1</td><td>Unique id used by <code>/api/network</code>.</td></tr>
+            <tr><td><code>network.server-name</code></td><td>Survival</td><td>Friendly server name.</td></tr>
+            <tr><td><code>network.hub-url</code></td><td>(empty)</td><td>Push this server's summary to a hub; blank disables pushing.</td></tr>
+            <tr><td><code>network.report-key</code></td><td>(empty)</td><td>Shared secret (<code>X-StatFYR-Key</code>) for pushing and accepting reports.</td></tr>
+            <tr><td><code>network.accept-reports</code></td><td>true</td><td>Accept <code>POST /api/network/report</code> from other servers.</td></tr>
+            <tr><td><code>network.report-interval-seconds</code></td><td>60</td><td>How often to push to the hub.</td></tr>
+            <tr><td><code>network.report-ttl-seconds</code></td><td>180</td><td>How long a received report stays valid.</td></tr>
+            <tr><td><code>milestones.*</code></td><td>varies</td><td>Configurable player/server milestones that can broadcast and notify Discord.</td></tr>
+            <tr><td><code>commands.aliases</code></td><td>[sf]</td><td>Aliases for <code>/statfyr</code>.</td></tr>
           </tbody>
         </table>
       </div>
@@ -186,9 +291,11 @@ cache:
 
       <h2 id="applying-changes">Applying changes</h2>
       <p>
-        Run <code>/statfyr reload</code> (permission <code>statfyr.admin</code>) to re-read the
-        file without a restart, or <code>/statfyr status</code> to confirm what the server picked
-        up: bind address, port, HTTPS, auth, rate limiting, and cache state.
+        Run <code>/statfyr reload</code> (permission <code>statfyr.reload</code> or{" "}
+        <code>statfyr.admin</code>) to re-read the file without a restart, or{" "}
+        <code>/statfyr status</code> to confirm what the server picked up: bind address, port,
+        HTTPS, auth, rate limiting, platform, profiles and online players. Analytics settings are
+        reloaded in place; the storage engine keeps running.
       </p>
     </DocsShell>
   );

@@ -5,6 +5,10 @@ import Landing from "./pages/Landing";
 import DocsPortal from "./pages/DocsPortal";
 import GettingStarted from "./pages/GettingStarted";
 import Configuration from "./pages/Configuration";
+import Commands from "./pages/Commands";
+import Placeholders from "./pages/Placeholders";
+import Integrations from "./pages/Integrations";
+import Analytics from "./pages/Analytics";
 import ApiReference from "./pages/ApiReference";
 import Examples from "./pages/Examples";
 import ExamplesSetup from "./pages/ExamplesSetup";
@@ -47,6 +51,18 @@ export default function App() {
       break;
     case "/docs/configuration":
       page = <Configuration />;
+      break;
+    case "/docs/commands":
+      page = <Commands />;
+      break;
+    case "/docs/placeholders":
+      page = <Placeholders />;
+      break;
+    case "/docs/integrations":
+      page = <Integrations />;
+      break;
+    case "/docs/analytics":
+      page = <Analytics />;
       break;
     case "/docs/api":
       page = <ApiReference />;

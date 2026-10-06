@@ -7,6 +7,7 @@ import in.potenfyr.statfyr.config.ConfigManager;
 import in.potenfyr.statfyr.player.PlayerService;
 import in.potenfyr.statfyr.util.JsonBuilder;
 import in.potenfyr.statfyr.util.ResponseUtil;
+import in.potenfyr.statfyr.util.Text;
 import org.bukkit.Bukkit;
 
 import java.io.IOException;
@@ -195,13 +196,12 @@ public final class PlayersListHandler implements HttpHandler {
                 String playerName =
                         resolvedPlayer.getName();
 
-                if (playerName == null
-                        || playerName.isBlank()) {
+                if (Text.isBlank(playerName)) {
 
                     playerName = "unknown";
                 }
 
-                if (!search.isBlank()
+                if (!Text.isBlank(search)
                         && !playerName
                         .toLowerCase()
                         .contains(search)) {
@@ -361,7 +361,7 @@ public final class PlayersListHandler implements HttpHandler {
                 uri.getQuery();
 
         if (query == null
-                || query.isBlank()) {
+                || Text.isBlank(query)) {
 
             return params;
         }

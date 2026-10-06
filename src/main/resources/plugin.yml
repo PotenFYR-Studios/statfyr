@@ -1,18 +1,88 @@
-name: statfyr
-version: ${project.version}
-main: in.potenfyr.statfyr.Statfyr
-api-version: 1.16
-description: Exposes Minecraft player statistics via a built-in HTTP REST API
-author: statfyr
-website: https://github.com/statfyr
+name: ${pluginName}
+version: ${version}
+main: ${pluginMain}
+# `api-version` is ignored by 1.8.x–1.12.x servers and required by 1.13+.
+# Using 1.13 keeps legacy material/stat handling enabled everywhere and is the
+# safest value for a plugin that supports the entire 1.8.x–26.x range.
+api-version: ${apiVersion}
+description: ${description}
+author: ${author}
+website: ${website}
+
+# Opt in to Folia's regionised scheduler. Unknown to Spigot/Paper (ignored).
+folia-supported: true
 
 commands:
   statfyr:
-    description: statfyr management commands
-    usage: /statfyr <reload|status>
-    permission: statfyr.admin
+    description: StatFYR analytics commands
+    usage: /statfyr <stats|top|help|reload|status>
+    aliases: [ sf ]
 
 permissions:
+
+  statfyr.*:
+    description: Grants every StatFYR permission
+    default: op
+    children:
+      statfyr.use: true
+      statfyr.stats: true
+      statfyr.stats.self: true
+      statfyr.stats.others: true
+      statfyr.top: true
+      statfyr.help: true
+      statfyr.admin: true
+      statfyr.reload: true
+      statfyr.status: true
+      statfyr.database: true
+      statfyr.purge: true
+      statfyr.debug: true
+
+  statfyr.use:
+    description: Allows basic StatFYR usage
+    default: true
+
+  statfyr.stats:
+    description: Allows viewing player statistics
+    default: true
+    children:
+      statfyr.stats.self: true
+
+  statfyr.stats.self:
+    description: Allows viewing your own statistics
+    default: true
+
+  statfyr.stats.others:
+    description: Allows viewing other players' statistics
+    default: op
+
+  statfyr.top:
+    description: Allows viewing leaderboards
+    default: true
+
+  statfyr.help:
+    description: Allows viewing the StatFYR help menu
+    default: true
+
   statfyr.admin:
-    description: Allows managing the statfyr plugin
+    description: Administrative StatFYR permissions
+    default: op
+
+  statfyr.reload:
+    description: Allows reloading the StatFYR configuration
+    default: op
+
+  statfyr.status:
+    description: Allows viewing StatFYR status
+    default: op
+
+  statfyr.database:
+    description: Allows viewing storage statistics
+    default: op
+
+  statfyr.purge:
+    description: Allows purging player analytics data
+    default: op
+
+  statfyr.debug:
+    description: Allows dumping StatFYR diagnostics
     default: op

@@ -1,7 +1,9 @@
 package in.potenfyr.statfyr.player;
 
 import in.potenfyr.statfyr.Statfyr;
+import in.potenfyr.statfyr.compat.SchedulerCompat;
 import in.potenfyr.statfyr.model.PlayerStats;
+import in.potenfyr.statfyr.util.Text;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
@@ -10,7 +12,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Future;
 import java.util.logging.Level;
 
 /**
@@ -48,12 +49,13 @@ public final class PlayerService {
      * - online player name
      * - offline player name
      */
+    @SuppressWarnings("deprecation")
     public UUID resolveUuid(
             String identifier
     ) {
 
         if (identifier == null
-                || identifier.isBlank()) {
+                || Text.isBlank(identifier)) {
 
             return null;
         }
@@ -80,28 +82,24 @@ public final class PlayerService {
         // Offline lookup
         try {
 
-            Future<UUID> future =
-                    Bukkit.getScheduler()
-                            .callSyncMethod(
-                                    plugin,
-                                    () -> {
+            return SchedulerCompat.callSync(
+                    plugin,
+                    () -> {
 
-                                        OfflinePlayer offlinePlayer =
-                                                Bukkit.getOfflinePlayer(
-                                                        identifier
-                                                );
+                        OfflinePlayer offlinePlayer =
+                                Bukkit.getOfflinePlayer(
+                                        identifier
+                                );
 
-                                        if (!offlinePlayer.hasPlayedBefore()) {
-                                            return null;
-                                        }
+                        if (!offlinePlayer.hasPlayedBefore()) {
+                            return null;
+                        }
 
-                                        cachePlayer(offlinePlayer);
+                        cachePlayer(offlinePlayer);
 
-                                        return offlinePlayer.getUniqueId();
-                                    }
-                            );
-
-            return future.get();
+                        return offlinePlayer.getUniqueId();
+                    }
+            );
 
         } catch (Exception exception) {
 
@@ -155,7 +153,7 @@ public final class PlayerService {
                 cachedNames.get(uuid);
 
         if (cached != null
-                && !cached.isBlank()) {
+                && !Text.isBlank(cached)) {
 
             return cached;
         }
@@ -178,8 +176,7 @@ public final class PlayerService {
             String name =
                     offlinePlayer.getName();
 
-            if (name != null
-                    && !name.isBlank()) {
+            if (!Text.isBlank(name)) {
 
                 cachedNames.put(uuid, name);
 

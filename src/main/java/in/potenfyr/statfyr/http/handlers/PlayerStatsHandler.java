@@ -6,6 +6,7 @@ import in.potenfyr.statfyr.Statfyr;
 import in.potenfyr.statfyr.model.PlayerStats;
 import in.potenfyr.statfyr.util.JsonBuilder;
 import in.potenfyr.statfyr.util.ResponseUtil;
+import in.potenfyr.statfyr.util.Text;
 import org.bukkit.Bukkit;
 
 import java.io.IOException;
@@ -50,8 +51,7 @@ public final class PlayerStatsHandler implements HttpHandler {
                                     .getPath()
                     );
 
-            if (identifier == null
-                    || identifier.isBlank()) {
+            if (Text.isBlank(identifier)) {
 
                 ResponseUtil.sendBadRequest(
                         exchange,
@@ -204,16 +204,14 @@ public final class PlayerStatsHandler implements HttpHandler {
         String playerName =
                 playerStats.getPlayerName();
 
-        if (playerName == null
-                || playerName.isBlank()) {
+        if (Text.isBlank(playerName)) {
 
             playerName =
                     Bukkit.getOfflinePlayer(playerUuid)
                             .getName();
         }
 
-        if (playerName == null
-                || playerName.isBlank()) {
+        if (Text.isBlank(playerName)) {
 
             playerName = "unknown";
         }
@@ -513,8 +511,7 @@ public final class PlayerStatsHandler implements HttpHandler {
         List<String> categories =
                 new ArrayList<>();
 
-        if (input == null
-                || input.isBlank()) {
+        if (Text.isBlank(input)) {
 
             return categories;
         }
@@ -525,7 +522,7 @@ public final class PlayerStatsHandler implements HttpHandler {
             String trimmed =
                     value.trim();
 
-            if (!trimmed.isBlank()) {
+            if (!Text.isBlank(trimmed)) {
                 categories.add(trimmed);
             }
         }
@@ -548,7 +545,7 @@ public final class PlayerStatsHandler implements HttpHandler {
                 uri.getQuery();
 
         if (query == null
-                || query.isBlank()) {
+                || Text.isBlank(query)) {
 
             return params;
         }

@@ -24,14 +24,31 @@ jobs:
         uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: '16'
-          cache: maven
+          java-version: '21'
+          cache: gradle
 
-      - name: Build with Maven
-        run: mvn clean package -DskipTests
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew --no-daemon clean build
+
+      - name: Verify Java 8 bytecode
+        shell: bash
+        run: |
+          JAR="$(ls build/libs/Statfyr-*.jar | grep -v sources | head -n1)"
+          test -n "${JAR}"
+          MAJOR="$(javap -verbose -cp "${JAR}" in.potenfyr.statfyr.util.JsonBuilder \
+                    | awk '/major version/ {print $3}')"
+          echo "Class file major version: ${MAJOR}"
+          if [ "${MAJOR}" != "52" ]; then
+            echo "Expected Java 8 (major 52) bytecode"; exit 1
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: Statfyr
-          path: target/*.jar
+          path: |
+            build/libs/Statfyr-*.jar
+            !build/libs/*-sources.jar

@@ -6,6 +6,7 @@ import in.potenfyr.statfyr.Statfyr;
 import in.potenfyr.statfyr.model.PlayerStats;
 import in.potenfyr.statfyr.util.JsonBuilder;
 import in.potenfyr.statfyr.util.ResponseUtil;
+import in.potenfyr.statfyr.util.Text;
 import org.bukkit.Bukkit;
 
 import java.io.IOException;
@@ -48,8 +49,7 @@ public final class PlayerSummaryHandler implements HttpHandler {
             String identifier =
                     extractIdentifier(path);
 
-            if (identifier == null
-                    || identifier.isBlank()) {
+            if (Text.isBlank(identifier)) {
 
                 ResponseUtil.sendBadRequest(
                         exchange,
@@ -204,16 +204,14 @@ public final class PlayerSummaryHandler implements HttpHandler {
         String playerName =
                 playerStats.getPlayerName();
 
-        if (playerName == null
-                || playerName.isBlank()) {
+        if (Text.isBlank(playerName)) {
 
             playerName =
                     Bukkit.getOfflinePlayer(playerUuid)
                             .getName();
         }
 
-        if (playerName == null
-                || playerName.isBlank()) {
+        if (Text.isBlank(playerName)) {
 
             playerName = "unknown";
         }
@@ -485,7 +483,7 @@ public final class PlayerSummaryHandler implements HttpHandler {
                 uri.getQuery();
 
         if (query == null
-                || query.isBlank()) {
+                || Text.isBlank(query)) {
 
             return params;
         }

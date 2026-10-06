@@ -42,8 +42,10 @@ const FAQS = [
     q: "What Minecraft versions are supported?",
     a: (
       <p>
-        Paper, Spigot, Purpur, and compatible forks running 1.16.5 through 1.21.x. The plugin
-        compiles against the Paper 1.16.5 API and uses only stable Bukkit API surface.
+        Bukkit, Spigot, Paper, Purpur, and Folia — Minecraft 1.8.x through 26.x. Versions
+        1.8.x–1.16.x are supported as legacy. The plugin compiles against the Paper 1.16.5 API,
+        emits Java 8 bytecode, and reaches newer or older API surface through a reflection-based
+        compatibility layer.
       </p>
     ),
   },

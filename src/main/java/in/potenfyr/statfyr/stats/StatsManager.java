@@ -1,6 +1,9 @@
 package in.potenfyr.statfyr.stats;
 
 import in.potenfyr.statfyr.Statfyr;
+import in.potenfyr.statfyr.compat.SchedulerCompat;
+import in.potenfyr.statfyr.compat.ServerVersion;
+import in.potenfyr.statfyr.compat.StatisticCompat;
 import in.potenfyr.statfyr.model.PlayerStats;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -8,20 +11,30 @@ import org.bukkit.Statistic;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Central stats management system.
  *
- * Responsibilities:
- * - live player stat collection
- * - offline stat caching
- * - async stat loading
- * - cache expiration
- * - periodic refresh
- * - future websocket broadcasting
+ * <p>Responsibilities:
+ * <ul>
+ *     <li>live player stat collection</li>
+ *     <li>offline stat caching</li>
+ *     <li>async stat loading</li>
+ *     <li>cache expiration</li>
+ *     <li>periodic refresh</li>
+ * </ul>
+ *
+ * <p>Live collection is fully version agnostic: the statistic category is
+ * derived from the stable enum name and material/entity filtering is resolved
+ * through {@link StatisticCompat}. This keeps the same binary working on
+ * Minecraft 1.8.x–26.x across Bukkit, Spigot, Paper, Purpur and Folia.
  */
 public final class StatsManager {
 
@@ -36,22 +49,6 @@ public final class StatsManager {
      */
     private static final long UPDATE_INTERVAL_TICKS =
             100L;
-
-    /**
-     * Precomputed materials.
-     */
-    private static final Material[] VALID_ITEMS =
-            Arrays.stream(Material.values())
-                    .filter(Material::isItem)
-                    .toArray(Material[]::new);
-
-    /**
-     * Precomputed entities.
-     */
-    private static final EntityType[] VALID_ENTITIES =
-            Arrays.stream(EntityType.values())
-                    .filter(EntityType::isAlive)
-                    .toArray(EntityType[]::new);
 
     private final Statfyr plugin;
 
@@ -88,14 +85,14 @@ public final class StatsManager {
 
     public void start() {
 
-        Bukkit.getScheduler().runTaskTimerAsynchronously(
+        SchedulerCompat.runAsyncRepeating(
                 plugin,
                 this::refreshOnlinePlayers,
                 20L,
                 UPDATE_INTERVAL_TICKS
         );
 
-        Bukkit.getScheduler().runTaskTimerAsynchronously(
+        SchedulerCompat.runAsyncRepeating(
                 plugin,
                 this::cleanupExpiredCache,
                 20L * 60L,
@@ -103,7 +100,8 @@ public final class StatsManager {
         );
 
         plugin.getLogger().info(
-                "StatsManager started."
+                "StatsManager started on "
+                        + ServerVersion.getPlatformLabel()
         );
     }
 
@@ -190,19 +188,27 @@ public final class StatsManager {
                 PlayerStats stats =
                         readLiveStats(player);
 
-                cache.put(
-                        player.getUniqueId(),
-                        new CachedStats(stats)
-                );
+                if (stats != null) {
 
-            } catch (Exception exception) {
+                    cache.put(
+                            player.getUniqueId(),
+                            new CachedStats(stats)
+                    );
+                }
 
-                plugin.getLogger().warning(
-                        "Failed to refresh stats for "
-                                + player.getName()
-                );
+            } catch (Throwable throwable) {
 
-                exception.printStackTrace();
+                if (plugin.getConfigManager() != null
+                        && plugin.getConfigManager()
+                        .isDebug()) {
+
+                    plugin.getLogger().warning(
+                            "Failed to refresh stats for "
+                                    + player.getName()
+                                    + ": "
+                                    + throwable.getMessage()
+                    );
+                }
             }
         }
     }
@@ -245,152 +251,61 @@ public final class StatsManager {
         Map<String, Long> killedBy =
                 new HashMap<>();
 
+        Material[] itemMaterials =
+                StatisticCompat.getItemMaterials();
+
+        Material[] blockMaterials =
+                StatisticCompat.getBlockMaterials();
+
+        EntityType[] entityTypes =
+                StatisticCompat.getLivingEntityTypes();
+
         for (Statistic statistic
                 : Statistic.values()) {
 
             try {
 
-                switch (statistic.getType()) {
+                String category =
+                        StatisticCompat.categoryOf(statistic);
 
-                    case UNTYPED -> {
+                if (StatisticCompat.UNTYPED.equals(category)) {
 
-                        int value =
-                                player.getStatistic(
-                                        statistic
-                                );
+                    collectUntyped(
+                            player,
+                            statistic,
+                            custom
+                    );
 
-                        if (value <= 0) {
-                            continue;
-                        }
+                } else if (StatisticCompat.BLOCK.equals(category)) {
 
-                        String key =
-                                switch (statistic) {
+                    collectMaterials(
+                            player,
+                            statistic,
+                            blockMaterials,
+                            mined
+                    );
 
-                                    case PLAY_ONE_MINUTE ->
-                                            StatKeys.PLAY_TIME;
+                } else if (StatisticCompat.ITEM.equals(category)) {
 
-                                    default ->
-                                            "minecraft:"
-                                                    + statistic.name()
-                                                    .toLowerCase();
-                                };
+                    collectMaterials(
+                            player,
+                            statistic,
+                            itemMaterials,
+                            itemTarget(statistic, crafted, used, broken, pickedUp, dropped)
+                    );
 
-                        custom.put(
-                                key,
-                                (long) value
-                        );
-                    }
+                } else if (StatisticCompat.ENTITY.equals(category)) {
 
-                    case BLOCK, ITEM -> {
-
-                        for (Material material
-                                : VALID_ITEMS) {
-
-                            try {
-
-                                int value =
-                                        player.getStatistic(
-                                                statistic,
-                                                material
-                                        );
-
-                                if (value <= 0) {
-                                    continue;
-                                }
-
-                                String key =
-                                        "minecraft:"
-                                                + material.name()
-                                                .toLowerCase();
-
-                                switch (statistic) {
-
-                                    case MINE_BLOCK ->
-                                            mined.put(
-                                                    key,
-                                                    (long) value
-                                            );
-
-                                    case CRAFT_ITEM ->
-                                            crafted.put(
-                                                    key,
-                                                    (long) value
-                                            );
-
-                                    case USE_ITEM ->
-                                            used.put(
-                                                    key,
-                                                    (long) value
-                                            );
-
-                                    case BREAK_ITEM ->
-                                            broken.put(
-                                                    key,
-                                                    (long) value
-                                            );
-
-                                    case PICKUP ->
-                                            pickedUp.put(
-                                                    key,
-                                                    (long) value
-                                            );
-
-                                    case DROP ->
-                                            dropped.put(
-                                                    key,
-                                                    (long) value
-                                            );
-                                }
-
-                            } catch (Exception ignored) {
-                            }
-                        }
-                    }
-
-                    case ENTITY -> {
-
-                        for (EntityType entityType
-                                : VALID_ENTITIES) {
-
-                            try {
-
-                                int value =
-                                        player.getStatistic(
-                                                statistic,
-                                                entityType
-                                        );
-
-                                if (value <= 0) {
-                                    continue;
-                                }
-
-                                String key =
-                                        "minecraft:"
-                                                + entityType.name()
-                                                .toLowerCase();
-
-                                switch (statistic) {
-
-                                    case KILL_ENTITY ->
-                                            killed.put(
-                                                    key,
-                                                    (long) value
-                                            );
-
-                                    case ENTITY_KILLED_BY ->
-                                            killedBy.put(
-                                                    key,
-                                                    (long) value
-                                            );
-                                }
-
-                            } catch (Exception ignored) {
-                            }
-                        }
-                    }
+                    collectEntities(
+                            player,
+                            statistic,
+                            entityTypes,
+                            entityTarget(statistic, killed, killedBy)
+                    );
                 }
 
-            } catch (Exception ignored) {
+            } catch (Throwable ignored) {
+                // One bad statistic must never break the whole snapshot.
             }
         }
 
@@ -409,6 +324,161 @@ public final class StatsManager {
                 player.getName(),
                 stats
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // Collection helpers
+    // -------------------------------------------------------------------------
+
+    private void collectUntyped(
+            Player player,
+            Statistic statistic,
+            Map<String, Long> target
+    ) {
+
+        int value =
+                player.getStatistic(statistic);
+
+        if (value <= 0) {
+            return;
+        }
+
+        String key =
+                StatisticCompat.isPlayTime(statistic)
+                        ? StatKeys.PLAY_TIME
+                        : "minecraft:" + statistic.name()
+                        .toLowerCase(Locale.ROOT);
+
+        target.put(
+                key,
+                (long) value
+        );
+    }
+
+    private void collectMaterials(
+            Player player,
+            Statistic statistic,
+            Material[] materials,
+            Map<String, Long> target
+    ) {
+
+        if (target == null) {
+            return;
+        }
+
+        for (Material material : materials) {
+
+            try {
+
+                int value =
+                        player.getStatistic(
+                                statistic,
+                                material
+                        );
+
+                if (value <= 0) {
+                    continue;
+                }
+
+                target.put(
+                        "minecraft:"
+                                + material.name()
+                                .toLowerCase(Locale.ROOT),
+                        (long) value
+                );
+
+            } catch (Throwable ignored) {
+                // Material is not valid for this statistic on this version.
+            }
+        }
+    }
+
+    private void collectEntities(
+            Player player,
+            Statistic statistic,
+            EntityType[] entityTypes,
+            Map<String, Long> target
+    ) {
+
+        if (target == null) {
+            return;
+        }
+
+        for (EntityType entityType : entityTypes) {
+
+            try {
+
+                int value =
+                        player.getStatistic(
+                                statistic,
+                                entityType
+                        );
+
+                if (value <= 0) {
+                    continue;
+                }
+
+                target.put(
+                        "minecraft:"
+                                + entityType.name()
+                                .toLowerCase(Locale.ROOT),
+                        (long) value
+                );
+
+            } catch (Throwable ignored) {
+                // Entity type is not valid for this statistic on this version.
+            }
+        }
+    }
+
+    private Map<String, Long> itemTarget(
+            Statistic statistic,
+            Map<String, Long> crafted,
+            Map<String, Long> used,
+            Map<String, Long> broken,
+            Map<String, Long> pickedUp,
+            Map<String, Long> dropped
+    ) {
+
+        switch (statistic.name()) {
+
+            case "CRAFT_ITEM":
+                return crafted;
+
+            case "USE_ITEM":
+                return used;
+
+            case "BREAK_ITEM":
+                return broken;
+
+            case "PICKUP":
+                return pickedUp;
+
+            case "DROP":
+                return dropped;
+
+            default:
+                return null;
+        }
+    }
+
+    private Map<String, Long> entityTarget(
+            Statistic statistic,
+            Map<String, Long> killed,
+            Map<String, Long> killedBy
+    ) {
+
+        switch (statistic.name()) {
+
+            case "KILL_ENTITY":
+                return killed;
+
+            case "ENTITY_KILLED_BY":
+                return killedBy;
+
+            default:
+                return null;
+        }
     }
 
     // -------------------------------------------------------------------------

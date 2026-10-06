@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import in.potenfyr.statfyr.Statfyr;
 import in.potenfyr.statfyr.model.PlayerStats;
+import in.potenfyr.statfyr.util.Text;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 
@@ -193,8 +194,7 @@ public final class StatsReader {
         }
 
         // Better offline name fallback
-        if (playerName == null
-                || playerName.isBlank()) {
+        if (Text.isBlank(playerName)) {
 
             try {
 

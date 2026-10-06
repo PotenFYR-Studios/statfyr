@@ -100,16 +100,72 @@ const ROUTES: RouteMeta[] = [
     },
   },
   {
-    path: "/docs/api",
-    title: "API Reference · Statfyr Docs",
+    path: "/docs/commands",
+    title: "Commands & Permissions · StatFYR Docs",
     description:
-      "Complete REST API reference for Statfyr: all 7 endpoints, request/response JSON examples, authentication, error shapes, leaderboard stat name formats.",
+      "Every StatFYR command, permission node, LuckPerms example, tab-completion behaviour, and the /sf alias.",
     jsonLd: {
       "@context": "https://schema.org",
       "@type": "TechArticle",
-      headline: "Statfyr API Reference",
+      headline: "StatFYR Commands & Permissions",
       description:
-        "Complete REST API reference for Statfyr with request/response examples.",
+        "Every StatFYR command, permission node and LuckPerms example.",
+      url: `${CANON}/docs/commands`,
+    },
+  },
+  {
+    path: "/docs/placeholders",
+    title: "PlaceholderAPI · StatFYR Docs",
+    description:
+      "Every StatFYR PlaceholderAPI placeholder: player statistics, K/D, playtime, sessions, rank, segments and server analytics.",
+    jsonLd: {
+      "@context": "https://schema.org",
+      "@type": "TechArticle",
+      headline: "StatFYR PlaceholderAPI",
+      description:
+        "Every StatFYR PlaceholderAPI placeholder for players and servers.",
+      url: `${CANON}/docs/placeholders`,
+    },
+  },
+  {
+    path: "/docs/integrations",
+    title: "Integrations · StatFYR Docs",
+    description:
+      "Optional StatFYR integrations: PlaceholderAPI, Vault economy analytics, Discord webhooks, Prometheus metrics, the web dashboard, and the custom metrics API.",
+    jsonLd: {
+      "@context": "https://schema.org",
+      "@type": "TechArticle",
+      headline: "StatFYR Integrations",
+      description:
+        "Optional StatFYR integrations: PlaceholderAPI, Vault, Discord, Prometheus and custom metrics.",
+      url: `${CANON}/docs/integrations`,
+    },
+  },
+  {
+    path: "/docs/analytics",
+    title: "Analytics & History · StatFYR Docs",
+    description:
+      "How StatFYR's analytics engine works: sessions, persistent history, daily/weekly/monthly periods, archives, server analytics, retention, segmentation, AFK detection, heatmaps and privacy.",
+    jsonLd: {
+      "@context": "https://schema.org",
+      "@type": "TechArticle",
+      headline: "StatFYR Analytics & History",
+      description:
+        "Sessions, history, periods, retention, segmentation, AFK detection and privacy.",
+      url: `${CANON}/docs/analytics`,
+    },
+  },
+  {
+    path: "/docs/api",
+    title: "API Reference · StatFYR Docs",
+    description:
+      "Complete REST API reference for StatFYR: every endpoint, request/response JSON examples, authentication, error shapes, and leaderboard stat name formats.",
+    jsonLd: {
+      "@context": "https://schema.org",
+      "@type": "TechArticle",
+      headline: "StatFYR API Reference",
+      description:
+        "Complete REST API reference for StatFYR with request/response examples.",
       url: `${CANON}/docs/api`,
     },
   },
@@ -157,7 +213,7 @@ const ROUTES: RouteMeta[] = [
           name: "What Minecraft versions are supported?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Paper, Spigot, Purpur, and compatible forks running 1.16.5 through 1.21.x. The plugin compiles against Paper 1.16.5 API and uses only stable Bukkit API surface.",
+            text: "Bukkit, Spigot, Paper, Purpur, and Folia — Minecraft 1.8.x through 26.x. Versions 1.8.x–1.16.x are supported as legacy. The plugin compiles against the Paper 1.16.5 API, emits Java 8 bytecode, and reaches newer or older API surface through a reflection-based compatibility layer.",
           },
         },
       ],
@@ -181,7 +237,7 @@ const ROUTES: RouteMeta[] = [
     path: "/examples",
     title: "Examples · Statfyr",
     description:
-      "Ready-to-paste Statfyr examples: a hardened config.yml (API key, HTTPS, CORS) and curl walkthroughs of all 7 REST endpoints.",
+      "Ready-to-paste Statfyr examples: a hardened config.yml (API key, HTTPS, CORS) and curl walkthroughs of every REST endpoint.",
     jsonLd: {
       "@context": "https://schema.org",
       "@type": "TechArticle",

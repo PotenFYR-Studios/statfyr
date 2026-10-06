@@ -19,6 +19,8 @@ build/
 *.jar
 *.war
 *.ear
+# The Gradle wrapper JAR must be committed.
+!gradle/wrapper/gradle-wrapper.jar
 
 # =========================================
 # Logs

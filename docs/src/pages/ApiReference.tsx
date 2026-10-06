@@ -30,7 +30,7 @@ export default function ApiReference() {
         { label: "API Reference" },
       ]}
       title="API Reference"
-      lede="Seven GET endpoints, all returning application/json. Each card below mirrors the handler as it ships."
+      lede="Every GET endpoint, all returning application/json. Each card below mirrors the handler as it ships."
       toc={TOC}
     >
       <h2 id="base-note">Base URL & auth</h2>
@@ -76,7 +76,7 @@ export default function ApiReference() {
       <p>
         Built-in stat names (bare words), dotted <code>category.key</code> aliases, full vanilla
         keys like <code>minecraft:mined:minecraft:sand</code>, and custom plugin stats are all
-        accepted. These seven are the hard-coded entries:
+        accepted. These are the built-in ranked metrics:
       </p>
       <div className="table-scroll">
         <table className="doc-table">
@@ -89,8 +89,9 @@ export default function ApiReference() {
         </table>
       </div>
       <Callout kind="note">
-        <code>playtime</code> is the only leaderboard that appends a <code>formatted</code> field
-        (human-readable duration). All other stats return raw integer <code>value</code>.
+        Time metrics (<code>playtime</code>, <code>active_time</code>, <code>afk_time</code>),
+        <code>kdr</code> and distance metrics append a human-readable <code>formatted</code> field.
+        All others return a raw integer <code>value</code>.
       </Callout>
 
       <h2 id="error-shape">Error shape</h2>

@@ -1,0 +1,22 @@
+/*
+ * =============================================================================
+ * Statfyr — Gradle settings
+ * =============================================================================
+ *
+ * This project was migrated from Maven (pom.xml) to Gradle.
+ *
+ * The build intentionally compiles against the *oldest* Bukkit/Paper API that
+ * Statfyr supports (1.16.5) and emits Java 8 bytecode. This produces a single
+ * JAR that runs on every server type and version from 1.8.x through 26.x:
+ *
+ *   Spigot · Paper · Purpur · Folia · Bukkit forks
+ *
+ * Anything that only exists on newer (or older) servers is accessed through
+ * the reflection based compatibility layer in `in.potenfyr.statfyr.compat`.
+ * =============================================================================
+ */
+
+rootProject.name = 'Statfyr'
+
+// Allow running builds faster when only the docs site changed.
+// (Docs are a standalone Bun/Vite project, not part of the Gradle build.)

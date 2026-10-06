@@ -34,8 +34,8 @@ export default function GettingStarted() {
     >
       <h2 id="requirements">Requirements</h2>
       <ul>
-        <li>A Paper, Spigot, or Purpur server running Minecraft 1.16 or newer (built against Paper 1.16.5).</li>
-        <li>Java 16 or newer on the server host.</li>
+        <li>A Bukkit-family server (Bukkit, Spigot, Paper, Purpur or Folia) running Minecraft 1.8.x–26.x.</li>
+        <li>Java 8 or newer on the server host (a single JAR runs on Java 8 through Java 25).</li>
         <li>A free TCP port reachable from wherever your clients run (default <code>8080</code>).</li>
       </ul>
 

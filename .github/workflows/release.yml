@@ -1,0 +1,196 @@
+name: Release
+
+# =============================================================================
+# StatFYR release pipeline
+# =============================================================================
+#
+# Trigger by pushing a version tag (v1.2.0) or manually via workflow_dispatch.
+#
+# What it does:
+#   1. Builds the plugin JAR with Gradle (Java 8 bytecode).
+#   2. Generates a Conventional-Commit changelog from git history.
+#   3. Publishes a GitHub Release with the JAR + checksum.
+#   4. If a release for the same version already exists, the build assets are
+#      *replaced* (--clobber) and the changelog section is *merged* into the
+#      existing release notes instead of duplicating it.
+# =============================================================================
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g. 1.2.0). Defaults to gradle.properties.'
+        required: false
+        type: string
+      prerelease:
+        description: 'Mark this release as a pre-release'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            TAG="${GITHUB_REF_NAME}"
+            VERSION="${TAG#v}"
+          else
+            VERSION="${{ inputs.version }}"
+            if [ -z "${VERSION}" ]; then
+              VERSION="$(grep -E '^version=' gradle.properties | head -n1 | cut -d= -f2 | tr -d ' ')"
+            fi
+            VERSION="${VERSION#v}"
+            TAG="v${VERSION}"
+          fi
+
+          PRERELEASE="${{ inputs.prerelease }}"
+          case "${VERSION}" in
+            *-*) PRERELEASE="true" ;;
+          esac
+          [ -z "${PRERELEASE}" ] && PRERELEASE="false"
+
+          echo "version=${VERSION}"     >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}"             >> "$GITHUB_OUTPUT"
+          echo "prerelease=${PRERELEASE}" >> "$GITHUB_OUTPUT"
+          echo "Releasing ${TAG} (prerelease=${PRERELEASE})"
+
+      - name: Setup JDK
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew --no-daemon clean build -Pversion=${{ steps.version.outputs.version }}
+
+      - name: Verify Java 8 bytecode
+        shell: bash
+        run: |
+          JAR="build/libs/Statfyr-${{ steps.version.outputs.version }}.jar"
+          test -f "${JAR}" || { echo "Missing ${JAR}"; ls -la build/libs; exit 1; }
+          MAJOR="$(javap -verbose -cp "${JAR}" in.potenfyr.statfyr.util.JsonBuilder \
+                    | awk '/major version/ {print $3}')"
+          echo "Class file major version: ${MAJOR}"
+          if [ "${MAJOR}" != "52" ]; then
+            echo "Expected Java 8 (major 52) bytecode"; exit 1
+          fi
+
+      - name: Generate changelog
+        shell: bash
+        run: |
+          chmod +x .github/scripts/*.sh
+          .github/scripts/generate-changelog.sh \
+            "${{ steps.version.outputs.tag }}" \
+            /tmp/new-changelog.md \
+            "${{ steps.version.outputs.version }}"
+
+      - name: Publish or update release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+
+          JAR="build/libs/Statfyr-${VERSION}.jar"
+          SOURCES="build/libs/Statfyr-${VERSION}-sources.jar"
+          CHECKSUM="${JAR}.sha256"
+
+          sha256sum "${JAR}" > "${CHECKSUM}"
+          ASSETS=("${JAR}" "${CHECKSUM}")
+          [ -f "${SOURCES}" ] && ASSETS+=("${SOURCES}")
+
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists — replacing assets and merging changelog."
+
+            gh release view "${TAG}" --json body -q '.body // ""' > /tmp/existing-changelog.md || true
+
+            .github/scripts/merge-changelog.sh \
+              /tmp/existing-changelog.md \
+              /tmp/new-changelog.md \
+              "${VERSION}" \
+              /tmp/merged-changelog.md
+
+            gh release edit "${TAG}" \
+              --title "StatFYR ${VERSION}" \
+              --notes-file /tmp/merged-changelog.md
+
+            gh release upload "${TAG}" "${ASSETS[@]}" --clobber
+          else
+            echo "Creating release ${TAG}."
+
+            FLAGS=("--title" "StatFYR ${VERSION}" "--notes-file" "/tmp/new-changelog.md")
+
+            if [ "${PRERELEASE}" = "true" ]; then
+              FLAGS+=("--prerelease")
+            else
+              FLAGS+=("--latest")
+            fi
+
+            gh release create "${TAG}" "${ASSETS[@]}" "${FLAGS[@]}"
+          fi
+
+          echo "Release ${TAG} complete."
+
+      - name: Update repository CHANGELOG.md
+        continue-on-error: true
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+
+          if [ ! -f CHANGELOG.md ]; then
+            printf '# Changelog\n\n' > CHANGELOG.md
+          fi
+
+          .github/scripts/merge-changelog.sh \
+            CHANGELOG.md \
+            /tmp/new-changelog.md \
+            "${VERSION}" \
+            /tmp/CHANGELOG.new.md
+
+          cp /tmp/CHANGELOG.new.md CHANGELOG.md
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+
+          if git diff --staged --quiet; then
+            echo "CHANGELOG.md unchanged."
+            exit 0
+          fi
+
+          git commit -m "docs(changelog): ${VERSION} [skip ci]"
+          git push origin "HEAD:${DEFAULT_BRANCH}"
