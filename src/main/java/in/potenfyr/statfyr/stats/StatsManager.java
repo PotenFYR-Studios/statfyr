@@ -2,6 +2,9 @@ package in.potenfyr.statfyr.stats;
 
 import in.potenfyr.statfyr.Statfyr;
 import in.potenfyr.statfyr.compat.SchedulerCompat;
+import in.potenfyr.statfyr.analytics.AnalyticsManager;
+import in.potenfyr.statfyr.analytics.Metrics;
+import in.potenfyr.statfyr.analytics.PlayerProfile;
 import in.potenfyr.statfyr.compat.ServerVersion;
 import in.potenfyr.statfyr.compat.StatisticCompat;
 import in.potenfyr.statfyr.model.PlayerStats;
@@ -174,11 +177,29 @@ public final class StatsManager {
 
         } else {
 
+            // OFFLINE PLAYER: Try vanilla stats file first, then analytics profile
             stats =
                     statsReader.readStats(
                             uuid,
                             null
                     );
+
+            // If vanilla stats are empty, check analytics profile for accumulated data
+            if (isStatsEmpty(stats)) {
+
+                PlayerProfile profile =
+                        plugin.getAnalytics()
+                                .profileIfPresent(uuid);
+
+                if (profile != null) {
+
+                    stats =
+                            convertProfileToStats(
+                                    profile,
+                                    uuid
+                            );
+                }
+            }
         }
 
         cache.put(
@@ -187,6 +208,82 @@ public final class StatsManager {
         );
 
         return stats;
+    }
+
+    /**
+     * Checks if a PlayerStats object has no meaningful data.
+     */
+    private boolean isStatsEmpty(PlayerStats stats) {
+
+        if (stats == null) {
+            return true;
+        }
+
+        // Check if rawStats is empty
+        if (stats.getRawStats() == null || stats.getRawStats().isEmpty()) {
+            return true;
+        }
+
+        // Check if all categories are empty
+        for (Map<String, Long> category : stats.getRawStats().values()) {
+            if (!category.isEmpty()) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Converts an analytics profile to PlayerStats for offline players.
+     * This provides stats for players who don't have vanilla stats files
+     * or whose stats files are empty.
+     */
+    private PlayerStats convertProfileToStats(
+            PlayerProfile profile,
+            UUID uuid
+    ) {
+
+        Map<String, Map<String, Long>> rawStats =
+                new HashMap<>();
+
+        // Add profile metrics as raw stats in the custom category
+        Map<String, Long> metricsMap =
+                new HashMap<>();
+
+        for (String key : Metrics.leaderboardKeys()) {
+
+            long value =
+                    profile.total(key);
+
+            if (value > 0) {
+                metricsMap.put(key, value);
+            }
+        }
+
+        // Add active/AFK time and sessions from profile
+        metricsMap.put(
+                Metrics.ACTIVE_TIME,
+                profile.activeSeconds
+        );
+        metricsMap.put(
+                Metrics.AFK_TIME,
+                profile.afkSeconds
+        );
+        metricsMap.put(
+                Metrics.SESSIONS,
+                (long) profile.totalSessions
+        );
+
+        if (!metricsMap.isEmpty()) {
+            rawStats.put(StatKeys.CATEGORY_CUSTOM, metricsMap);
+        }
+
+        return new PlayerStats(
+                uuid,
+                profile.name,
+                rawStats
+        );
     }
 
     // -------------------------------------------------------------------------

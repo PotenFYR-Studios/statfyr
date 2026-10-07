@@ -785,6 +785,15 @@ public final class AnalyticsManager {
         return profiles.size();
     }
 
+    /**
+     * Returns all known player UUIDs from analytics profiles.
+     * Used by endpoints that need to list all tracked players.
+     */
+    public List<UUID> allProfileUuids() {
+
+        return new ArrayList<>(profiles.keySet());
+    }
+
     // -------------------------------------------------------------------------
     // Metrics
     // -------------------------------------------------------------------------

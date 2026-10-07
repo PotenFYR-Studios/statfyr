@@ -3,12 +3,15 @@ package in.potenfyr.statfyr.http.handlers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import in.potenfyr.statfyr.Statfyr;
+import in.potenfyr.statfyr.analytics.AnalyticsManager;
 import in.potenfyr.statfyr.config.ConfigManager;
 import in.potenfyr.statfyr.player.PlayerService;
 import in.potenfyr.statfyr.util.JsonBuilder;
 import in.potenfyr.statfyr.util.ResponseUtil;
 import in.potenfyr.statfyr.util.Text;
 import org.bukkit.Bukkit;
+
+import java.util.UUID;
 
 import java.io.IOException;
 import java.net.URI;
@@ -172,29 +175,44 @@ public final class PlayersListHandler implements HttpHandler {
         long startTime =
                 System.currentTimeMillis();
 
-        List<PlayerService.ResolvedPlayer> resolvedPlayers =
-                plugin.getPlayerResolver()
-                        .getAllPlayers();
+        // Combine players from both sources:
+        // 1. StatsReader (vanilla stats files)
+        // 2. AnalyticsManager (plugin profiles)
+        List<UUID> allUuids =
+                new ArrayList<>();
+
+        // Add UUIDs from stats reader (vanilla stats)
+        allUuids.addAll(
+                plugin.getStatsReader()
+                        .getAllKnownUuids()
+        );
+
+        // Add UUIDs from analytics profiles (plugin storage)
+        for (UUID uuid : plugin.getAnalytics()
+                .allProfileUuids()) {
+
+            if (!allUuids.contains(uuid)) {
+                allUuids.add(uuid);
+            }
+        }
 
         List<PlayerEntry> players =
                 new ArrayList<>();
 
-        for (PlayerService.ResolvedPlayer resolvedPlayer
-                : resolvedPlayers) {
+        for (UUID playerUuid : allUuids) {
 
             try {
 
                 boolean online =
-                        Bukkit.getPlayer(
-                                resolvedPlayer.getUuid()
-                        ) != null;
+                        Bukkit.getPlayer(playerUuid) != null;
 
                 if (onlineOnly && !online) {
                     continue;
                 }
 
                 String playerName =
-                        resolvedPlayer.getName();
+                        plugin.getPlayerResolver()
+                                .resolvePlayerName(playerUuid);
 
                 if (Text.isBlank(playerName)) {
 
@@ -211,8 +229,7 @@ public final class PlayersListHandler implements HttpHandler {
 
                 players.add(
                         new PlayerEntry(
-                                resolvedPlayer.getUuid()
-                                        .toString(),
+                                playerUuid.toString(),
                                 playerName,
                                 online
                         )
