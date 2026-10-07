@@ -177,9 +177,30 @@ public final class PlayerStatsHandler implements HttpHandler {
             long requestStart
     ) {
 
-        PlayerStats playerStats =
-                plugin.getStatsManager()
-                        .getPlayerStats(playerUuid);
+        PlayerStats playerStats;
+
+        boolean online =
+                Bukkit.getPlayer(playerUuid) != null;
+
+        if (online) {
+            // Online player: use StatsManager for live stats
+            playerStats =
+                    plugin.getStatsManager()
+                            .getPlayerStats(playerUuid);
+        } else {
+            // Offline player: use unified analytics source
+            // This merges profile data with latest snapshot item breakdowns
+            playerStats =
+                    plugin.getAnalytics()
+                            .getOfflinePlayerStats(playerUuid);
+
+            // Fall back to StatsManager if analytics has no data
+            if (playerStats == null) {
+                playerStats =
+                        plugin.getStatsManager()
+                                .getPlayerStats(playerUuid);
+            }
+        }
 
         if (playerStats == null) {
 
@@ -197,9 +218,6 @@ public final class PlayerStatsHandler implements HttpHandler {
 
                     .build();
         }
-
-        boolean online =
-                Bukkit.getPlayer(playerUuid) != null;
 
         String playerName =
                 playerStats.getPlayerName();

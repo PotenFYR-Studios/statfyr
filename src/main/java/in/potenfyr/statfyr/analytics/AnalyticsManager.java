@@ -764,6 +764,92 @@ public final class AnalyticsManager {
         return profiles.get(uuid);
     }
 
+    /**
+     * Returns complete stats for an offline player by merging:
+     * 1. Analytics profile data (allTime metrics, session data)
+     * 2. Latest raw stat snapshot (item breakdowns from when player was online)
+     * 3. Vanilla stats file data (if available)
+     *
+     * This provides a unified view of player stats regardless of online status.
+     *
+     * @param uuid player UUID
+     * @return PlayerStats with merged data, or null if no data available
+     */
+    public PlayerStats getOfflinePlayerStats(UUID uuid) {
+
+        if (uuid == null) {
+            return null;
+        }
+
+        PlayerProfile profile =
+                profiles.get(uuid);
+
+        // Load from disk if not in memory
+        if (profile == null) {
+            profile = storage.loadProfile(uuid);
+        }
+
+        if (profile == null) {
+            return null;
+        }
+
+        // Start with profile's merged stats (includes latest snapshot)
+        Map<String, Map<String, Long>> mergedStats =
+                new HashMap<>(profile.getMergedStats());
+
+        if (mergedStats == null) {
+            mergedStats = new HashMap<>();
+        }
+
+        // Merge with vanilla stats file data if available (for modded items etc.)
+        PlayerStats vanillaStats =
+                plugin.getStatsReader()
+                        .readStats(uuid, profile.name);
+
+        if (vanillaStats != null
+                && vanillaStats.getRawStats() != null) {
+
+            for (Map.Entry<String, Map<String, Long>> entry :
+                    vanillaStats.getRawStats().entrySet()) {
+
+                String category = entry.getKey();
+                Map<String, Long> vanillaItems = entry.getValue();
+
+                if (vanillaItems == null || vanillaItems.isEmpty()) {
+                    continue;
+                }
+
+                Map<String, Long> existingItems =
+                        mergedStats.get(category);
+
+                if (existingItems == null) {
+                    mergedStats.put(category, new HashMap<>(vanillaItems));
+                } else {
+                    // Merge items, taking the max value for each item
+                    for (Map.Entry<String, Long> itemEntry : vanillaItems.entrySet()) {
+                        String item = itemEntry.getKey();
+                        Long existing = existingItems.get(item);
+                        Long value = itemEntry.getValue();
+
+                        if (existing == null || value > existing) {
+                            existingItems.put(item, value);
+                        }
+                    }
+                }
+            }
+        }
+
+        if (mergedStats.isEmpty()) {
+            return null;
+        }
+
+        return new PlayerStats(
+                uuid,
+                profile.name,
+                mergedStats
+        );
+    }
+
     public Collection<PlayerProfile> allProfiles() {
 
         return profiles.values();

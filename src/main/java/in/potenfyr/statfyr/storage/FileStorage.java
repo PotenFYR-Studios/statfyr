@@ -74,6 +74,11 @@ public final class FileStorage implements Storage {
         ensureDir(historyDir);
         ensureDir(playerHistoryDir);
         ensureDir(activityDir);
+
+        logger.info(
+                "Statfyr data directories initialized at: "
+                        + baseDir.getAbsolutePath()
+        );
     }
 
     // -- profiles ------------------------------------------------------------

@@ -321,6 +321,16 @@ public final class StatsManager {
                             player.getUniqueId(),
                             new CachedStats(stats)
                     );
+
+                    // Update analytics profile with raw stat snapshot
+                    // This preserves item breakdowns for offline players
+                    PlayerProfile profile =
+                            plugin.getAnalytics()
+                                    .profileIfPresent(player.getUniqueId());
+
+                    if (profile != null) {
+                        profile.addStatSnapshot(stats.getRawStats());
+                    }
                 }
 
             } catch (Throwable throwable) {
