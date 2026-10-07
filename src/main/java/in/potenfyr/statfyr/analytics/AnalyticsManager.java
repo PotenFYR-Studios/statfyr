@@ -3,6 +3,7 @@ package in.potenfyr.statfyr.analytics;
 import in.potenfyr.statfyr.Statfyr;
 import in.potenfyr.statfyr.compat.SchedulerCompat;
 import in.potenfyr.statfyr.model.PlayerStats;
+import in.potenfyr.statfyr.stats.StatKeys;
 import in.potenfyr.statfyr.storage.ActivityEvent;
 import in.potenfyr.statfyr.storage.FileStorage;
 import in.potenfyr.statfyr.storage.PeriodArchive;
@@ -795,13 +796,18 @@ public final class AnalyticsManager {
 
         // Start with profile's merged stats (includes latest snapshot)
         Map<String, Map<String, Long>> mergedStats =
-                new HashMap<>(profile.getMergedStats());
+                profile.getMergedStats();
 
         if (mergedStats == null) {
             mergedStats = new HashMap<>();
+        } else {
+            mergedStats = new HashMap<>(mergedStats);
         }
 
         // Merge with vanilla stats file data if available (for modded items etc.)
+        // Note: We skip minecraft:custom from vanilla stats because the profile already
+        // has processed canonical metrics (playtime, distance_flown, etc.) that should
+        // take precedence over raw vanilla keys (minecraft:play_time, minecraft:fly_one_cm).
         PlayerStats vanillaStats =
                 plugin.getStatsReader()
                         .readStats(uuid, profile.name);
@@ -815,7 +821,10 @@ public final class AnalyticsManager {
                 String category = entry.getKey();
                 Map<String, Long> vanillaItems = entry.getValue();
 
-                if (vanillaItems == null || vanillaItems.isEmpty()) {
+                // Skip empty categories and the custom category (profile has processed metrics)
+                if (vanillaItems == null
+                        || vanillaItems.isEmpty()
+                        || StatKeys.CATEGORY_CUSTOM.equals(category)) {
                     continue;
                 }
 

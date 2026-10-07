@@ -329,7 +329,13 @@ public final class PlayerProfile {
         }
 
         if (!sessionMetrics.isEmpty()) {
-            merged.put(StatKeys.CATEGORY_CUSTOM, sessionMetrics);
+            if (customCategory.isEmpty()) {
+                merged.put(StatKeys.CATEGORY_CUSTOM, sessionMetrics);
+            } else {
+                // Merge session metrics into existing custom category
+                customCategory.putAll(sessionMetrics);
+                merged.put(StatKeys.CATEGORY_CUSTOM, customCategory);
+            }
         }
 
         // Merge with latest snapshot item breakdowns if available
