@@ -1,5 +1,6 @@
 package in.potenfyr.statfyr.model;
 
+import in.potenfyr.statfyr.analytics.Metrics;
 import in.potenfyr.statfyr.stats.StatKeys;
 
 import java.util.*;
@@ -69,10 +70,51 @@ public final class PlayerStats {
             return 0L;
         }
 
-        return categoryMap.getOrDefault(
-                key,
-                0L
-        );
+        Long value =
+                categoryMap.get(key);
+
+        if (value != null) {
+            return value;
+        }
+
+        // Fallback: try canonical metric name (e.g., "playtime" for "minecraft:play_time")
+        // This allows profile data with canonical names to work with PlayerStats getters
+        if (key.startsWith("minecraft:")) {
+            String strippedKey = key.substring("minecraft:".length());
+            value =
+                    categoryMap.get(strippedKey);
+
+            if (value != null) {
+                return value;
+            }
+
+            // Also try without underscores (play_time -> playtime)
+            String noUnderscore = strippedKey.replace("_", "");
+            value =
+                    categoryMap.get(noUnderscore);
+
+            if (value != null) {
+                return value;
+            }
+
+            // Also try singular/plural variations (jump -> jumps)
+            if (noUnderscore.endsWith("s") && noUnderscore.length() > 1) {
+                String singular = noUnderscore.substring(0, noUnderscore.length() - 1);
+                value = categoryMap.get(singular);
+                if (value != null) {
+                    return value;
+                }
+            } else {
+                // Try plural (jump -> jumps)
+                String plural = noUnderscore + "s";
+                value = categoryMap.get(plural);
+                if (value != null) {
+                    return value;
+                }
+            }
+        }
+
+        return 0L;
     }
 
     public Map<String, Long> getCategory(

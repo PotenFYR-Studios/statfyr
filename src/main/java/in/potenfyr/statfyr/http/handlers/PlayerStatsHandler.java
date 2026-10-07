@@ -179,28 +179,23 @@ public final class PlayerStatsHandler implements HttpHandler {
 
         PlayerStats playerStats;
 
-        boolean online =
-                Bukkit.getPlayer(playerUuid) != null;
+        // Always use analytics profile as the unified source of truth
+        // This provides consistent data regardless of online/offline status
+        // The profile merges accumulated data with vanilla stats file data
+        playerStats =
+                plugin.getAnalytics()
+                        .getOfflinePlayerStats(playerUuid);
 
-        if (online) {
-            // Online player: use StatsManager for live stats
+        // Fall back to StatsManager if analytics has no data
+        if (playerStats == null) {
             playerStats =
                     plugin.getStatsManager()
                             .getPlayerStats(playerUuid);
-        } else {
-            // Offline player: use unified analytics source
-            // This merges profile data with latest snapshot item breakdowns
-            playerStats =
-                    plugin.getAnalytics()
-                            .getOfflinePlayerStats(playerUuid);
-
-            // Fall back to StatsManager if analytics has no data
-            if (playerStats == null) {
-                playerStats =
-                        plugin.getStatsManager()
-                                .getPlayerStats(playerUuid);
-            }
         }
+
+        // Determine online status for display
+        boolean online =
+                Bukkit.getPlayer(playerUuid) != null;
 
         if (playerStats == null) {
 

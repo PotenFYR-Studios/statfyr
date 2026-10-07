@@ -178,8 +178,15 @@ public final class PlayerSummaryHandler implements HttpHandler {
     ) {
 
         PlayerStats playerStats =
-                plugin.getStatsManager()
-                        .getPlayerStats(playerUuid);
+                plugin.getAnalytics()
+                        .getOfflinePlayerStats(playerUuid);
+
+        // Fall back to StatsManager if analytics has no data
+        if (playerStats == null) {
+            playerStats =
+                    plugin.getStatsManager()
+                            .getPlayerStats(playerUuid);
+        }
 
         if (playerStats == null) {
 

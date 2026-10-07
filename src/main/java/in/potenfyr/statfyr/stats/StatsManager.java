@@ -330,6 +330,10 @@ public final class StatsManager {
 
                     if (profile != null) {
                         profile.addStatSnapshot(stats.getRawStats());
+
+                        // Also update profile's allTime metrics with live data
+                        // This ensures the profile stays current while player is online
+                        updateProfileMetricsFromLiveStats(profile, stats);
                     }
                 }
 
@@ -651,6 +655,45 @@ public final class StatsManager {
 
     public void clearCache() {
         cache.clear();
+    }
+
+    /**
+     * Updates the profile's allTime metrics with live stats data.
+     * Takes the MAX of existing profile data and live stats.
+     * This ensures the profile stays current while the player is online.
+     */
+    private void updateProfileMetricsFromLiveStats(
+            PlayerProfile profile,
+            PlayerStats liveStats
+    ) {
+
+        if (profile == null || liveStats == null) {
+            return;
+        }
+
+        Map<String, Map<String, Long>> rawStats =
+                liveStats.getRawStats();
+
+        if (rawStats == null || rawStats.isEmpty()) {
+            return;
+        }
+
+        // Update allTime metrics from live stats
+        Map<String, Long> customStats =
+                rawStats.get(StatKeys.CATEGORY_CUSTOM);
+
+        if (customStats != null) {
+            for (Map.Entry<String, Long> entry : customStats.entrySet()) {
+                String key = entry.getKey();
+                Long value = entry.getValue();
+
+                // Update profile allTime with MAX of existing and live value
+                long existing = profile.allTime(key);
+                if (value > existing) {
+                    profile.allTime.put(key, value);
+                }
+            }
+        }
     }
 
     // -------------------------------------------------------------------------

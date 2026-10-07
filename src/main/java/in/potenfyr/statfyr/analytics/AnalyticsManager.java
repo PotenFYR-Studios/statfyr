@@ -4,6 +4,7 @@ import in.potenfyr.statfyr.Statfyr;
 import in.potenfyr.statfyr.compat.SchedulerCompat;
 import in.potenfyr.statfyr.model.PlayerStats;
 import in.potenfyr.statfyr.stats.StatKeys;
+import in.potenfyr.statfyr.stats.StatsReader;
 import in.potenfyr.statfyr.storage.ActivityEvent;
 import in.potenfyr.statfyr.storage.FileStorage;
 import in.potenfyr.statfyr.storage.PeriodArchive;
@@ -11,8 +12,18 @@ import in.potenfyr.statfyr.storage.ServerSnapshot;
 import in.potenfyr.statfyr.storage.Snapshot;
 import in.potenfyr.statfyr.storage.Storage;
 import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import in.potenfyr.statfyr.util.Text;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 
+import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -130,6 +141,9 @@ public final class AnalyticsManager {
         serverState.serverName = serverName;
 
         loadAllProfiles();
+
+        // Pre-track players from world stats files that aren't in profiles yet
+        preTrackPlayersFromWorldStats();
 
         running = true;
 
@@ -317,6 +331,11 @@ public final class AnalyticsManager {
         profile.name = player.getName();
         profile.beginSession(now, null);
         profile.sessionStartMetrics = currentMetricMap(profile);
+
+        // On first join or if profile is fresh, seed with vanilla stats file data
+        if (isNew) {
+            seedProfileFromPlayerStatsFile(profile, player);
+        }
 
         serverState.knownPlayers.add(profile.uuid);
         serverState.recordSession(
@@ -821,10 +840,31 @@ public final class AnalyticsManager {
                 String category = entry.getKey();
                 Map<String, Long> vanillaItems = entry.getValue();
 
-                // Skip empty categories and the custom category (profile has processed metrics)
-                if (vanillaItems == null
-                        || vanillaItems.isEmpty()
-                        || StatKeys.CATEGORY_CUSTOM.equals(category)) {
+                // For minecraft:custom, merge with profile data taking the MAX
+                // This ensures online players see live data combined with profile data
+                if (vanillaItems == null || vanillaItems.isEmpty()) {
+                    continue;
+                }
+
+                if (StatKeys.CATEGORY_CUSTOM.equals(category)) {
+                    // Merge custom category: take MAX of each key from vanilla and profile
+                    Map<String, Long> profileCustom =
+                            mergedStats.get(StatKeys.CATEGORY_CUSTOM);
+
+                    if (profileCustom == null) {
+                        profileCustom = new HashMap<>();
+                        mergedStats.put(StatKeys.CATEGORY_CUSTOM, profileCustom);
+                    }
+
+                    for (Map.Entry<String, Long> vanillaEntry : vanillaItems.entrySet()) {
+                        String key = vanillaEntry.getKey();
+                        Long vanillaValue = vanillaEntry.getValue();
+                        Long profileValue = profileCustom.get(key);
+
+                        if (profileValue == null || vanillaValue > profileValue) {
+                            profileCustom.put(key, vanillaValue);
+                        }
+                    }
                     continue;
                 }
 
@@ -848,10 +888,6 @@ public final class AnalyticsManager {
             }
         }
 
-        if (mergedStats.isEmpty()) {
-            return null;
-        }
-
         return new PlayerStats(
                 uuid,
                 profile.name,
@@ -862,6 +898,263 @@ public final class AnalyticsManager {
     public Collection<PlayerProfile> allProfiles() {
 
         return profiles.values();
+    }
+
+    /**
+     * Pre-tracks players from world stats files that aren't already in profiles.
+     * This ensures all known players from Minecraft stats are tracked in statfyr.
+     * Missing usernames are resolved from usercache.json until the player comes online.
+     */
+    private void preTrackPlayersFromWorldStats() {
+
+        StatsReader statsReader =
+                plugin.getStatsReader();
+
+        if (statsReader == null) {
+            return;
+        }
+
+        List<UUID> worldUuids =
+                statsReader.getAllKnownUuids();
+
+        plugin.getLogger().info(
+                "Pre-tracking "
+                        + worldUuids.size()
+                        + " players from world stats files"
+        );
+
+        for (UUID uuid : worldUuids) {
+
+            // Skip if already in profiles
+            if (profiles.containsKey(uuid)) {
+                continue;
+            }
+
+            // Try to load existing profile from disk
+            PlayerProfile existing =
+                    storage.loadProfile(uuid);
+
+            if (existing != null) {
+                profiles.put(uuid, existing);
+                continue;
+            }
+
+            // Get player name from usercache.json or offline player data
+            String playerName =
+                    resolvePlayerName(uuid);
+
+            // Create a new profile seeded with stats from the world stats file
+            PlayerStats vanillaStats =
+                    statsReader.readStats(uuid, playerName);
+
+            PlayerProfile profile =
+                    new PlayerProfile(
+                            uuid,
+                            playerName,
+                            System.currentTimeMillis()
+                    );
+
+            // Seed the profile with data from vanilla stats file (MAX merge)
+            seedProfileFromVanillaStats(profile, vanillaStats);
+
+            profiles.put(uuid, profile);
+        }
+
+        plugin.getLogger().info(
+                "Pre-tracking complete. Total profiles: "
+                        + profiles.size()
+        );
+    }
+
+    /**
+     * Resolves a player name from various sources:
+     * 1. Offline player data (Bukkit offline players)
+     * 2. usercache.json
+     * 3. Default to "unknown"
+     */
+    private String resolvePlayerName(UUID uuid) {
+
+        // Try Bukkit offline player first
+        OfflinePlayer offlinePlayer =
+                Bukkit.getOfflinePlayer(uuid);
+
+        if (offlinePlayer != null
+                && !Text.isBlank(offlinePlayer.getName())) {
+            return offlinePlayer.getName();
+        }
+
+        // Try reading from usercache.json in testserver folder
+        File usercacheFile =
+                new File(
+                        plugin.getServer().getWorlds().get(0)
+                                .getWorldFolder(),
+                        "usercache.json"
+                );
+
+        if (usercacheFile.exists()) {
+            try {
+                String json =
+                        new String(
+                                Files.readAllBytes(usercacheFile.toPath()),
+                                StandardCharsets.UTF_8
+                        );
+                JsonObject usercache =
+                        new JsonParser()
+                                .parse(json)
+                                .getAsJsonObject();
+
+                JsonObject players =
+                        usercache.getAsJsonObject("players");
+
+                if (players != null) {
+                    for (Map.Entry<String, JsonElement> entry :
+                            players.entrySet()) {
+
+                        String playerUuid =
+                                entry.getKey();
+
+                        if (playerUuid.equals(uuid.toString())) {
+                            JsonObject playerData =
+                                    entry.getValue().getAsJsonObject();
+                            String name =
+                                    playerData.get("name")
+                                            .getAsString();
+                            if (!Text.isBlank(name)) {
+                                return name;
+                            }
+                        }
+                    }
+                }
+
+            } catch (Exception ignored) {
+            }
+        }
+
+        return "unknown";
+    }
+
+    /**
+     * Seeds a profile with data from vanilla stats file.
+     * Takes the MAX of profile data and vanilla stats for each metric.
+     */
+    private void seedProfileFromVanillaStats(
+            PlayerProfile profile,
+            PlayerStats vanillaStats
+    ) {
+
+        if (vanillaStats == null
+                || vanillaStats.getRawStats() == null) {
+            return;
+        }
+
+        Map<String, Map<String, Long>> rawStats =
+                vanillaStats.getRawStats();
+
+        // Process minecraft:custom category - convert raw keys to canonical metrics
+        Map<String, Long> customStats =
+                rawStats.get(StatKeys.CATEGORY_CUSTOM);
+
+        if (customStats != null) {
+
+            for (Map.Entry<String, Long> entry : customStats.entrySet()) {
+
+                String rawKey = entry.getKey();
+                Long value = entry.getValue();
+
+                // Convert raw key to canonical metric and update profile
+                String canonicalMetric =
+                        rawKeyToCanonical.get(rawKey);
+
+                if (canonicalMetric != null) {
+                    long existing = profile.allTime(canonicalMetric);
+                    if (value > existing) {
+                        profile.allTime.put(canonicalMetric, value);
+                    }
+                }
+            }
+        }
+
+        // Process item categories (mined, crafted, used, etc.)
+        // These are stored in the profile's statSnapshots for item breakdowns
+        for (Map.Entry<String, Map<String, Long>> categoryEntry :
+                rawStats.entrySet()) {
+
+            String category = categoryEntry.getKey();
+
+            // Skip custom category (already processed)
+            if (StatKeys.CATEGORY_CUSTOM.equals(category)) {
+                continue;
+            }
+
+            Map<String, Long> items = categoryEntry.getValue();
+
+            if (items == null || items.isEmpty()) {
+                continue;
+            }
+
+            // Add to statSnapshots for item breakdown tracking
+            profile.addStatSnapshot(rawStats);
+            break; // Only need one snapshot with all categories
+        }
+    }
+
+    /**
+     * Seeds a profile with data from the player's vanilla stats file when they join.
+     * This ensures the profile starts with accurate baseline data from the stats file.
+     */
+    private void seedProfileFromPlayerStatsFile(
+            PlayerProfile profile,
+            Player player
+    ) {
+
+        StatsReader statsReader =
+                plugin.getStatsReader();
+
+        if (statsReader == null) {
+            return;
+        }
+
+        PlayerStats vanillaStats =
+                statsReader.readStats(player.getUniqueId(), player.getName());
+
+        if (vanillaStats == null) {
+            return;
+        }
+
+        seedProfileFromVanillaStats(profile, vanillaStats);
+    }
+
+    /**
+     * Mapping from raw Minecraft stat keys to canonical metric names.
+     * Used when seeding profiles from vanilla stats files.
+     */
+    private static final Map<String, String> rawKeyToCanonical =
+            new HashMap<>();
+
+    static {
+        rawKeyToCanonical.put("minecraft:play_time", Metrics.PLAYTIME);
+        rawKeyToCanonical.put("minecraft:total_world_time", Metrics.PLAYTIME);
+        rawKeyToCanonical.put("minecraft:walk_one_cm", Metrics.DISTANCE_WALKED);
+        rawKeyToCanonical.put("minecraft:sprint_one_cm", Metrics.DISTANCE_SPRINTED);
+        rawKeyToCanonical.put("minecraft:fly_one_cm", Metrics.DISTANCE_FLOWN);
+        rawKeyToCanonical.put("minecraft:swim_one_cm", Metrics.DISTANCE_SWUM);
+        rawKeyToCanonical.put("minecraft:walk_under_water_one_cm", Metrics.DISTANCE_SWUM);
+        rawKeyToCanonical.put("minecraft:fall_one_cm", "distance_fallen");
+        rawKeyToCanonical.put("minecraft:climb_one_cm", "distance_climbed");
+        rawKeyToCanonical.put("minecraft:jump", Metrics.JUMPS);
+        rawKeyToCanonical.put("minecraft:deaths", Metrics.DEATHS);
+        rawKeyToCanonical.put("minecraft:damage_dealt", Metrics.DAMAGE_DEALT);
+        rawKeyToCanonical.put("minecraft:damage_taken", Metrics.DAMAGE_TAKEN);
+        rawKeyToCanonical.put("minecraft:player_kills", Metrics.PLAYER_KILLS);
+        rawKeyToCanonical.put("minecraft:mob_kills", Metrics.MOB_KILLS);
+        rawKeyToCanonical.put("minecraft:items_crafted", Metrics.ITEMS_CRAFTED);
+        rawKeyToCanonical.put("minecraft:items_used", Metrics.ITEMS_USED);
+        rawKeyToCanonical.put("minecraft:break_item", "items_broken");
+        rawKeyToCanonical.put("minecraft:items_picked_up", Metrics.ITEMS_PICKED_UP);
+        rawKeyToCanonical.put("minecraft:items_dropped", Metrics.ITEMS_DROPPED);
+        rawKeyToCanonical.put("minecraft:open_chest", Metrics.CHESTS_OPENED);
+        rawKeyToCanonical.put("minecraft:fish_caught", "fish_caught");
+        rawKeyToCanonical.put("minecraft:enchant_item", "enchantments_applied");
     }
 
     public void deleteProfile(UUID uuid) {
