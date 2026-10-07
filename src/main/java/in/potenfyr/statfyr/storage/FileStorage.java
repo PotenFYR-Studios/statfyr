@@ -135,21 +135,10 @@ public final class FileStorage implements Storage {
         File target =
                 profileFile(uuid);
 
-        File temp =
-                new File(
-                        playersDir,
-                        uuid + ".tmp"
-                );
-
         try {
 
-            writeFile(temp, JsonIO.toJson(profile));
-
-            Files.move(
-                    temp.toPath(),
-                    target.toPath(),
-                    StandardCopyOption.REPLACE_EXISTING
-            );
+            // Write directly to target for better Windows compatibility
+            writeFile(target, JsonIO.toJson(profile));
 
         } catch (Exception exception) {
 
@@ -518,18 +507,10 @@ public final class FileStorage implements Storage {
         File target =
                 new File(baseDir, "server.json");
 
-        File temp =
-                new File(baseDir, "server.json.tmp");
-
         try {
 
-            writeFile(temp, JsonIO.toJson(state));
-
-            Files.move(
-                    temp.toPath(),
-                    target.toPath(),
-                    StandardCopyOption.REPLACE_EXISTING
-            );
+            // Write directly to target for better Windows compatibility
+            writeFile(target, JsonIO.toJson(state));
 
         } catch (Exception exception) {
 
