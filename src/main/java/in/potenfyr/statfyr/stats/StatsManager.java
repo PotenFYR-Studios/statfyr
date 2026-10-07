@@ -34,7 +34,18 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>Live collection is fully version agnostic: the statistic category is
  * derived from the stable enum name and material/entity filtering is resolved
  * through {@link StatisticCompat}. This keeps the same binary working on
- * Minecraft 1.8.x–26.x across Bukkit, Spigot, Paper, Purpur and Folia.
+ * Minecraft 1.8.x through 26.x across Bukkit, Spigot, Paper, Purpur and Folia.
+ *
+ * <p><strong>Threading:</strong> vanilla statistics are plain hash maps
+ * mutated by the server thread. Reading them from an async task races with
+ * the server's own writes and breaks (which previously killed the refresh
+ * task silently, freezing every stat until the player relogged). Collection
+ * therefore runs on the main thread on a short interval and HTTP threads only
+ * ever read the resulting immutable snapshots from {@link #cache}.
+ *
+ * <p>When a player quits, their cache entry is removed so the next request
+ * re-reads the stats file the server just flushed to disk, keeping offline
+ * stats accurate too.
  */
 public final class StatsManager {
 
@@ -45,7 +56,7 @@ public final class StatsManager {
             30_000L;
 
     /**
-     * Online refresh interval.
+     * How often live statistics are collected, in ticks (100 ticks = 5s).
      */
     private static final long UPDATE_INTERVAL_TICKS =
             100L;
@@ -55,7 +66,8 @@ public final class StatsManager {
     private final StatsReader statsReader;
 
     /**
-     * Main cache.
+     * Main cache: uuid -> latest snapshot. Written by the main-thread
+     * collector, read by HTTP threads; {@link CachedStats} is immutable.
      */
     private final ConcurrentHashMap<UUID, CachedStats>
             cache =
@@ -85,7 +97,12 @@ public final class StatsManager {
 
     public void start() {
 
-        SchedulerCompat.runAsyncRepeating(
+        /*
+         * Vanilla statistic maps are mutated by the server thread, so the
+         * collector must run there. The task is cheap: one pass over each
+         * online player's stat maps every 5 seconds, no I/O.
+         */
+        SchedulerCompat.runSyncRepeating(
                 plugin,
                 this::refreshOnlinePlayers,
                 20L,
@@ -103,6 +120,19 @@ public final class StatsManager {
                 "StatsManager started on "
                         + ServerVersion.getPlatformLabel()
         );
+    }
+
+    /**
+     * Removes a player's live snapshot. Called on quit so the next request
+     * falls through to the stats file the server just flushed to disk.
+     *
+     * @param uuid uuid of the player that left
+     */
+    public void invalidate(UUID uuid) {
+
+        if (uuid != null) {
+            cache.remove(uuid);
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -175,7 +205,7 @@ public final class StatsManager {
     }
 
     // -------------------------------------------------------------------------
-    // Refresh
+    // Refresh (main thread)
     // -------------------------------------------------------------------------
 
     private void refreshOnlinePlayers() {

@@ -50,6 +50,13 @@ public final class PlayerListener implements Listener {
         }
 
         lastTouch.remove(event.getPlayer().getUniqueId());
+
+        // Drop the live snapshot so the next request re-reads the stats file
+        // the server just flushed on quit. Without this, an expired cache
+        // entry could keep serving the last in-memory snapshot.
+        plugin.getStatsManager()
+                .invalidate(event.getPlayer().getUniqueId());
+
         plugin.getAnalytics().onQuit(event.getPlayer());
     }
 

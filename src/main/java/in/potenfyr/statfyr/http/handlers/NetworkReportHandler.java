@@ -24,6 +24,12 @@ import java.nio.charset.StandardCharsets;
  */
 public final class NetworkReportHandler implements HttpHandler {
 
+    /**
+     * Hard cap on accepted report bodies (512 KB). Reports are tiny JSON
+     * documents; anything larger is hostile.
+     */
+    private static final int MAX_BODY_BYTES = 512 * 1024;
+
     private final Statfyr plugin;
 
     public NetworkReportHandler(Statfyr plugin) {
@@ -50,7 +56,20 @@ public final class NetworkReportHandler implements HttpHandler {
                     exchange.getRequestHeaders()
                             .getFirst("X-StatFYR-Key");
 
-            if (!requiredKey.equals(provided)) {
+            byte[] providedBytes =
+                    provided == null
+                            ? new byte[0]
+                            : provided.getBytes(
+                            java.nio.charset.StandardCharsets.UTF_8);
+
+            byte[] expectedBytes =
+                    requiredKey.getBytes(
+                            java.nio.charset.StandardCharsets.UTF_8);
+
+            if (!java.security.MessageDigest.isEqual(
+                    providedBytes,
+                    expectedBytes
+            )) {
 
                 ResponseUtil.sendUnauthorized(exchange);
                 return;
@@ -114,7 +133,15 @@ public final class NetworkReportHandler implements HttpHandler {
             int read;
 
             while ((read = input.read(chunk)) != -1) {
+
                 buffer.write(chunk, 0, read);
+
+                if (buffer.size() > MAX_BODY_BYTES) {
+
+                    throw new IOException(
+                            "Report body exceeds limit"
+                    );
+                }
             }
 
             return new String(

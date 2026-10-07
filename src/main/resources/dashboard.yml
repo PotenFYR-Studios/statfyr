@@ -1,0 +1,84 @@
+# =========================================================
+# Statfyr Dashboard Configuration
+# =========================================================
+# Everything that controls the web dashboard served at
+# /dashboard lives in this file, separate from config.yml.
+# The dashboard reads this configuration on startup and on
+# /statfyr reload, so changes here require a reload.
+
+# ---------------------------------------------------------
+# MASTER SWITCH
+# ---------------------------------------------------------
+
+# Serve the dashboard at /dashboard
+enabled: false
+
+# ---------------------------------------------------------
+# BRANDING
+# ---------------------------------------------------------
+
+# Page title (browser tab) and header text
+title: "StatFYR"
+
+# Short line of text shown next to the title
+subtitle: "Server Stats"
+
+# Dark or light: "dark" | "light"
+theme: "dark"
+
+# Accent color used for buttons, links and highlights
+accent: "#3ecf8e"
+
+# ---------------------------------------------------------
+# BEHAVIOUR
+# ---------------------------------------------------------
+
+# How often live data refreshes, in seconds (minimum 10)
+refresh-seconds: 30
+
+# Base URL of the API when the dashboard is hosted somewhere
+# other than this server. Leave empty to use same-origin.
+api-base: ""
+
+# ---------------------------------------------------------
+# API KEY HANDLING
+# ---------------------------------------------------------
+
+# When API authentication is enabled in config.yml, the
+# dashboard can embed the configured key into the page so
+# nobody is ever asked to type one into the browser.
+#
+# Only keep this on when /dashboard is not reachable by the
+# public internet (for example behind a reverse proxy with
+# its own login, or on a LAN). Anyone who can load the page
+# can read the embedded key.
+embed-api-key: true
+
+# ---------------------------------------------------------
+# DEFAULT LEADERBOARD VIEW
+# ---------------------------------------------------------
+
+leaderboard:
+  # playtime | kills | kdr | blocks_mined | items_crafted | ...
+  metric: "playtime"
+  # all_time | daily | weekly | monthly
+  period: "all_time"
+
+# ---------------------------------------------------------
+# MODULES
+# ---------------------------------------------------------
+# Set any module to false to remove that section.
+
+modules:
+
+  # Top three players highlight
+  podium: true
+
+  # Leaderboard table with metric and period controls
+  board: true
+
+  # Player lookup with detailed personal stats
+  lookup: true
+
+  # Online right now player cards
+  live: true

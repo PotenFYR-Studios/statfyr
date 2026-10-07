@@ -177,7 +177,7 @@ https:
 
 security:
   enable-api-key: false
-  api-key: ""                # or set the STATFYR_API_KEY env var
+  api-key: ""                  # or set the STATFYR_API_KEY env var
   enable-rate-limit: true
   rate-limit-requests: 120
   rate-limit-window-seconds: 60
@@ -203,7 +203,7 @@ pagination:
 
 For any server reachable beyond localhost:
 
-1. **Enable API key authentication**: `security.enable-api-key: true` with a long random key
+1. **Enable API key authentication**: set `security.enable-api-key: true` with a long random key
 2. **Enable HTTPS**: generate a keystore and set `https.enabled: true`
 3. **Restrict the bind address**: `http.bind-address: "127.0.0.1"` if only local services (e.g. a reverse proxy) need access
 4. **Enable IP whitelisting**: `security.enable-ip-whitelist: true` with your dashboard's IPs
@@ -271,6 +271,19 @@ Server placeholders:
 %statfyr_server_peak_all_time%   %statfyr_server_unique_today%
 %statfyr_server_total_players%   %statfyr_server_sessions%
 ```
+
+## 🖥️ Web Dashboard
+
+An optional built-in dashboard is served at `/dashboard` when `enabled: true` is set in
+`plugins/statfyr/dashboard.yml`. It is configured separately from the API (branding, theme,
+accent color, refresh interval, default leaderboard view) and each section can be toggled
+independently under `modules:` in that file (overview, charts, leaderboards, players,
+retention, segments, network).
+
+The page never asks visitors for an API key: the server injects its configuration (and,
+when `embed-api-key: true` and API auth is on, the key itself) on load. Keep the dashboard
+behind a reverse proxy or on a LAN when the key is embedded. See [ENDPOINT.md](ENDPOINT.md)
+for the full `dashboard.yml` reference.
 
 ## 🔌 Integrations
 

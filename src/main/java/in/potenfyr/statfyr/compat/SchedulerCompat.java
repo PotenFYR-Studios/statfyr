@@ -19,6 +19,12 @@ import java.util.function.Consumer;
  */
 public final class SchedulerCompat {
 
+    /**
+     * Upper bound on waiting for the main thread in {@link #callSync}. Keeps
+     * HTTP worker threads from hanging when the server is lagging.
+     */
+    private static final long SYNC_TIMEOUT_SECONDS = 5L;
+
     private SchedulerCompat() {
     }
 
@@ -85,6 +91,84 @@ public final class SchedulerCompat {
                 delayTicks,
                 periodTicks
         );
+    }
+
+    /**
+     * Runs a task on the main thread (or Folia's global region scheduler) on
+     * a fixed period.
+     *
+     * <p>Used for reading vanilla statistics, which are plain hash maps
+     * mutated by the server thread and therefore unsafe to read off-thread.
+     *
+     * @param plugin      owning plugin
+     * @param task        task to run
+     * @param delayTicks  initial delay in ticks
+     * @param periodTicks period in ticks
+     * @return {@code true} when the task was scheduled
+     */
+    public static boolean runSyncRepeating(
+            Plugin plugin,
+            Runnable task,
+            long delayTicks,
+            long periodTicks
+    ) {
+
+        if (!ServerVersion.isFolia()) {
+
+            try {
+
+                Bukkit.getScheduler()
+                        .runTaskTimer(
+                                plugin,
+                                task,
+                                delayTicks,
+                                periodTicks
+                        );
+
+                return true;
+
+            } catch (Throwable ignored) {
+                // Fall through to the Folia path.
+            }
+        }
+
+        if (GET_GLOBAL_REGION_SCHEDULER == null) {
+            return false;
+        }
+
+        try {
+
+            Object scheduler =
+                    GET_GLOBAL_REGION_SCHEDULER.invoke(null);
+
+            if (scheduler == null) {
+                return false;
+            }
+
+            Method runAtFixedRate =
+                    scheduler.getClass()
+                            .getMethod(
+                                    "runAtFixedRate",
+                                    Plugin.class,
+                                    Consumer.class,
+                                    long.class,
+                                    long.class
+                            );
+
+            runAtFixedRate.invoke(
+                    scheduler,
+                    plugin,
+                    (Consumer<Object>) ignored -> task.run(),
+                    Math.max(1L, delayTicks),
+                    Math.max(1L, periodTicks)
+            );
+
+            return true;
+
+        } catch (Throwable ignored) {
+
+            return false;
+        }
     }
 
     /**
@@ -224,6 +308,10 @@ public final class SchedulerCompat {
      * <p>On Folia there is no global main thread; offline-player lookups are
      * safe to resolve from the calling thread so the callable runs directly.
      *
+     * <p>The wait is bounded: if the main thread cannot service the call
+     * within a short budget the callable runs inline rather than blocking an
+     * HTTP worker thread forever.
+     *
      * @param plugin   owning plugin
      * @param callable work to execute
      * @param <T>      result type
@@ -248,7 +336,16 @@ public final class SchedulerCompat {
                                     callable
                             );
 
-            return future.get();
+            return future.get(
+                    SYNC_TIMEOUT_SECONDS,
+                    TimeUnit.SECONDS
+            );
+
+        } catch (java.util.concurrent.TimeoutException timeoutException) {
+
+            // Main thread stalled or is shut down: fall back to running the
+            // lookup inline instead of leaking a blocked worker thread.
+            return callable.call();
 
         } catch (Throwable throwable) {
 

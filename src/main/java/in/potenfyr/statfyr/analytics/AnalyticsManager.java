@@ -145,6 +145,19 @@ public final class AnalyticsManager {
                 snapshotTicks
         );
 
+        /*
+         * Live accrual: keeps playtime, active/AFK buckets and metric totals
+         * fresh while players are ONLINE. Without this, those numbers only
+         * moved when a player quit, so dashboards showed stale stats for
+         * anyone still playing.
+         */
+        SchedulerCompat.runAsyncRepeating(
+                plugin,
+                this::accrueLive,
+                20L * 30L,
+                20L * 30L
+        );
+
         SchedulerCompat.runAsyncRepeating(
                 plugin,
                 this::maintenance,
@@ -583,6 +596,63 @@ public final class AnalyticsManager {
 
             if (value > existing) {
                 profile.allTime.put(key, value);
+            }
+        }
+    }
+
+    /**
+     * Lightweight pass over online players: accrues active/AFK time, applies
+     * current metric totals and refreshes lastSeen without writing history
+     * snapshots. Runs every 30 seconds so playtime and derived stats advance
+     * live while players are still on the server.
+     */
+    private void accrueLive() {
+
+        if (!collectionEnabled || !running) {
+            return;
+        }
+
+        long now =
+                System.currentTimeMillis();
+
+        for (Player player : Bukkit.getOnlinePlayers()) {
+
+            try {
+
+                PlayerProfile profile =
+                        profiles.get(player.getUniqueId());
+
+                if (profile == null) {
+
+                    profile =
+                            profile(player.getUniqueId(), player.getName());
+                }
+
+                boolean isAfk =
+                        afkEnabled
+                                && (now - profile.lastActivity) > afkThresholdMs;
+
+                profile.afk = isAfk;
+                profile.accrue(now, isAfk, true);
+                profile.lastSeen = now;
+
+                PlayerStats stats =
+                        plugin.getStatsManager()
+                                .getPlayerStats(player.getUniqueId());
+
+                if (stats != null) {
+                    applyMetrics(
+                            profile,
+                            Metrics.extract(stats),
+                            now
+                    );
+                }
+
+                saveProfile(profile);
+
+            } catch (Throwable ignored) {
+                // A failed live tick must never break the loop; the next one
+                // and the deeper snapshot pass will catch up.
             }
         }
     }

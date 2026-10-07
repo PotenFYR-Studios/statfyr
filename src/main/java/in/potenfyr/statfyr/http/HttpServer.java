@@ -279,11 +279,9 @@ public final class HttpServer {
             );
         }
 
-        // Optional API-first web dashboard.
-        if (plugin.getConfig().getBoolean(
-                "integrations.dashboard.enabled",
-                false
-        )) {
+        // Optional API-first web dashboard, configured in dashboard.yml.
+        if (plugin.getDashboardConfig() != null
+                && plugin.getDashboardConfig().isEnabled()) {
 
             server.createContext(
                     "/dashboard",

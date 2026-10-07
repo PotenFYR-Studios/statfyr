@@ -277,11 +277,6 @@ integrations:
   prometheus:
     enabled: false
 
-  # Lightweight, API-first web dashboard served at /dashboard.
-  # It consumes the same public REST API (enter your API key in the page).
-  dashboard:
-    enabled: false
-
 # =========================================================
 # NETWORK / MULTI-SERVER
 # =========================================================

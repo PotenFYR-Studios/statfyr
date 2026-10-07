@@ -1,8 +1,9 @@
 package in.potenfyr.statfyr.analytics;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Persistent per-player analytics profile.
@@ -32,19 +33,24 @@ public final class PlayerProfile {
 
     // -- metrics -------------------------------------------------------------
     /** All-time canonical metric totals. */
-    public Map<String, Long> allTime = new HashMap<>();
+    public Map<String, Long> allTime =
+            new ConcurrentHashMap<>();
 
     /** Metric value captured at the start of each period window. */
-    public Map<String, Map<String, Long>> periodBaselines = new HashMap<>();
+    public Map<String, Map<String, Long>> periodBaselines =
+            new ConcurrentHashMap<>();
 
     /** Epoch millis at which each period window started. */
-    public Map<String, Long> periodStarts = new HashMap<>();
+    public Map<String, Long> periodStarts =
+            new ConcurrentHashMap<>();
 
     /** Third-party metrics registered through the custom metrics API. */
-    public Map<String, Double> customMetrics = new HashMap<>();
+    public Map<String, Double> customMetrics =
+            new ConcurrentHashMap<>();
 
     /** Achieved milestones: milestone key -> epoch millis. */
-    public Map<String, Long> milestones = new HashMap<>();
+    public Map<String, Long> milestones =
+            new ConcurrentHashMap<>();
 
     // -- runtime only --------------------------------------------------------
     public transient long lastAccrual;

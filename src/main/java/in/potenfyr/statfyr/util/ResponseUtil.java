@@ -41,10 +41,16 @@ public final class ResponseUtil {
             return;
         }
 
-        byte[] bodyBytes =
-                jsonBody.getBytes(
-                        StandardCharsets.UTF_8
+        // HEAD responses must carry headers only; writing a body throws.
+        boolean headRequest =
+                Boolean.TRUE.equals(
+                        exchange.getAttribute("statfyr.head")
                 );
+
+        byte[] bodyBytes =
+                headRequest
+                        ? new byte[0]
+                        : jsonBody.getBytes(StandardCharsets.UTF_8);
 
         boolean gzip =
                 supportsGzip(exchange);

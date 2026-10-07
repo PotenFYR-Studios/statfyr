@@ -535,8 +535,58 @@ Read-only Vault economy analytics (returns `{ "enabled": false }` when Vault is 
 
 ## GET `/dashboard`
 
-Optional, API-first dashboard (enabled with `integrations.dashboard.enabled: true`). It consumes
-the same public REST API — enter your API key in the page. No separate analytics implementation.
+Optional, API-first dashboard. Enabled with `enabled: true` in `plugins/statfyr/dashboard.yml`.
+
+The dashboard consumes the same public REST API as every other client. It is configured entirely
+from `dashboard.yml` (title, subtitle, theme, accent color, refresh interval, default leaderboard
+view) and visitors are never asked to type an API key into the page: the server injects its
+configuration on load, including the API key when both of these hold:
+
+- `embed-api-key: true` in `dashboard.yml` (default)
+- `security.enable-api-key: true` with a non-empty `api-key` in `config.yml`
+
+Only leave `embed-api-key` enabled where `/dashboard` is not publicly reachable (LAN, reverse
+proxy with its own authentication).
+
+### Modules
+
+Each section of the page can be toggled independently in `dashboard.yml`:
+
+| Key                  | Section                                    |
+|----------------------|--------------------------------------------|
+| `modules.overview`   | Headline counters                          |
+| `modules.charts`     | Players-online and sessions-by-hour charts |
+| `modules.leaderboards` | Leaderboard table with metric/period controls |
+| `modules.players`    | Player directory with search               |
+| `modules.retention`  | New player retention bars                  |
+| `modules.segments`   | Activity segments                          |
+| `modules.network`    | Multi-server network table                 |
+
+### dashboard.yml example
+
+```yaml
+enabled: true
+title: "My Server"
+subtitle: "Live Stats"
+theme: "dark"            # dark | light
+accent: "#8b5cf6"
+refresh-seconds: 30
+api-base: ""             # empty = same origin
+embed-api-key: true
+leaderboard:
+  metric: "kills"
+  period: "all_time"
+modules:
+  overview: true
+  charts: true
+  leaderboards: true
+  players: true
+  retention: true
+  segments: true
+  network: true
+```
+
+Changes require a server restart or `/statfyr reload`.
 
 ---
 

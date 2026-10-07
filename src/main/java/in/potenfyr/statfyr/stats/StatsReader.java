@@ -29,6 +29,18 @@ public final class StatsReader {
             fileCache =
             new ConcurrentHashMap<>();
 
+    /**
+     * Insertion order for evicting the oldest cached files.
+     */
+    private final java.util.Deque<UUID> cacheOrder =
+            new java.util.concurrent.ConcurrentLinkedDeque<>();
+
+    /**
+     * Maximum number of parsed offline stats files kept in memory. Parsed
+     * stats files are large (thousands of entries), so this must stay small.
+     */
+    private static final int FILE_CACHE_LIMIT = 256;
+
     public StatsReader(
             Statfyr plugin
     ) {
@@ -79,13 +91,28 @@ public final class StatsReader {
                             playerName
                     );
 
-            fileCache.put(
+            if (fileCache.put(
                     playerUuid,
                     new CachedFile(
                             modified,
                             parsed
                     )
-            );
+            ) == null) {
+
+                cacheOrder.addLast(playerUuid);
+
+                while (cacheOrder.size() > FILE_CACHE_LIMIT) {
+
+                    UUID oldest =
+                            cacheOrder.pollFirst();
+
+                    if (oldest == null) {
+                        break;
+                    }
+
+                    fileCache.remove(oldest);
+                }
+            }
 
             return parsed;
 
@@ -160,6 +187,8 @@ public final class StatsReader {
 
                             if (normalizedKey.equals(
                                     "minecraft:play_one_minute"
+                            ) || normalizedKey.equals(
+                                    "minecraft:play_time"
                             )) {
 
                                 normalizedKey =
@@ -301,9 +330,27 @@ public final class StatsReader {
         for (org.bukkit.World world
                 : Bukkit.getWorlds()) {
 
+            File worldFolder =
+                    world.getWorldFolder();
+
+            // Modern versions (26.x) keep player data under world/players/.
+            File modern =
+                    new File(
+                            worldFolder,
+                            "players"
+                                    + File.separator
+                                    + "stats"
+                                    + File.separator
+                                    + fileName
+                    );
+
+            if (modern.exists()) {
+                return modern;
+            }
+
             File candidate =
                     new File(
-                            world.getWorldFolder(),
+                            worldFolder,
                             "stats"
                                     + File.separator
                                     + fileName
@@ -323,10 +370,26 @@ public final class StatsReader {
             return null;
         }
 
-        return new File(
+        File worldFolder =
                 Bukkit.getWorlds()
                         .get(0)
-                        .getWorldFolder(),
+                        .getWorldFolder();
+
+        // Modern versions (26.x) moved player data under world/players/.
+        File modern =
+                new File(
+                        worldFolder,
+                        "players"
+                                + File.separator
+                                + "stats"
+                );
+
+        if (modern.isDirectory()) {
+            return modern;
+        }
+
+        return new File(
+                worldFolder,
                 "stats"
         );
     }

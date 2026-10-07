@@ -1,10 +1,11 @@
 package in.potenfyr.statfyr.analytics;
 
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Persistent server-level analytics state.
@@ -12,6 +13,11 @@ import java.util.Set;
  * <p>Serialised to {@code plugins/statfyr/data/server.json}. Day-keyed maps
  * are pruned according to the configured retention window so this file never
  * grows without bound.
+ *
+ * <p>All maps are concurrent: sessions are recorded from join/quit events and
+ * async snapshot tasks while HTTP threads iterate them for summaries,
+ * retention and leaderboards. Per-day player lists are copy-on-write because
+ * they are read far more often than they are appended to.
  */
 public final class ServerState {
 
@@ -22,34 +28,34 @@ public final class ServerState {
     public String serverName = "Survival";
 
     /** Highest concurrent player count ever seen. */
-    public int peakAllTime;
+    public volatile int peakAllTime;
 
     /** Highest concurrent player count per ISO day (yyyy-MM-dd). */
-    public Map<String, Integer> peakByDay = new HashMap<>();
+    public final Map<String, Integer> peakByDay = new ConcurrentHashMap<>();
 
     /** Distinct player UUIDs seen per ISO day. */
-    public Map<String, java.util.List<String>> playersByDay = new HashMap<>();
+    public final Map<String, List<String>> playersByDay = new ConcurrentHashMap<>();
 
     /** Session count per ISO day. */
-    public Map<String, Integer> sessionsByDay = new HashMap<>();
+    public final Map<String, Integer> sessionsByDay = new ConcurrentHashMap<>();
 
     /** Players whose first ever join happened on this day. */
-    public Map<String, Integer> newPlayersByDay = new HashMap<>();
+    public final Map<String, Integer> newPlayersByDay = new ConcurrentHashMap<>();
 
     /** Every player UUID that has ever been seen. */
-    public Set<String> knownPlayers = new HashSet<>();
+    public final Set<String> knownPlayers = ConcurrentHashMap.newKeySet();
 
     /** Total sessions recorded. */
-    public long totalSessions;
+    public volatile long totalSessions;
 
     /** All-time session count grouped by hour of day (0-23). */
-    public Map<String, Integer> sessionsByHour = new HashMap<>();
+    public final Map<String, Integer> sessionsByHour = new ConcurrentHashMap<>();
 
     /** All-time session count grouped by weekday name. */
-    public Map<String, Integer> sessionsByWeekday = new HashMap<>();
+    public final Map<String, Integer> sessionsByWeekday = new ConcurrentHashMap<>();
 
     /** Last archived window start per period token. */
-    public Map<String, Long> periodWindowStarts = new HashMap<>();
+    public final Map<String, Long> periodWindowStarts = new ConcurrentHashMap<>();
 
     // -- helpers -------------------------------------------------------------
 
@@ -72,19 +78,23 @@ public final class ServerState {
 
         totalSessions++;
 
-        sessionsByDay.merge(day, 1, Integer::sum);
-        sessionsByHour.merge(String.valueOf(hour), 1, Integer::sum);
-        sessionsByWeekday.merge(weekday, 1, Integer::sum);
+        bump(sessionsByDay, day);
+        bump(sessionsByHour, String.valueOf(hour));
+        bump(sessionsByWeekday, weekday);
 
         if (isNew) {
-            newPlayersByDay.merge(day, 1, Integer::sum);
+            bump(newPlayersByDay, day);
         }
 
-        java.util.List<String> players =
-                playersByDay.computeIfAbsent(
-                        day,
-                        ignored -> new java.util.ArrayList<>()
-                );
+        List<String> players =
+                new CopyOnWriteArrayList<>();
+
+        List<String> existing =
+                playersByDay.putIfAbsent(day, players);
+
+        if (existing != null) {
+            players = existing;
+        }
 
         if (!players.contains(uuid)) {
             players.add(uuid);
@@ -107,7 +117,15 @@ public final class ServerState {
                 peakByDay.get(day);
 
         if (current == null || online > current) {
-            peakByDay.put(day, online);
+
+            // putFirst-style "keep the maximum" under concurrency: only the
+            // higher value wins regardless of arrival order.
+            Integer sentinel =
+                    peakByDay.putIfAbsent(day, online);
+
+            if (sentinel != null && online > sentinel) {
+                peakByDay.replace(day, sentinel, online);
+            }
         }
     }
 
@@ -118,11 +136,11 @@ public final class ServerState {
     public Set<String> uniqueAcross(java.util.List<String> days) {
 
         Set<String> unique =
-                new LinkedHashSet<>();
+                new HashSet<>();
 
         for (String day : days) {
 
-            java.util.List<String> players =
+            List<String> players =
                     playersByDay.get(day);
 
             if (players != null) {
@@ -131,5 +149,25 @@ public final class ServerState {
         }
 
         return unique;
+    }
+
+    private static void bump(Map<String, Integer> map, String key) {
+
+        Integer current =
+                map.get(key);
+
+        if (current == null) {
+
+            Integer race =
+                    map.putIfAbsent(key, 1);
+
+            if (race != null) {
+                map.replace(key, race, race + 1);
+            }
+
+            return;
+        }
+
+        map.replace(key, current, current + 1);
     }
 }

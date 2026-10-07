@@ -6,6 +6,7 @@ import in.potenfyr.statfyr.commands.MessageService;
 import in.potenfyr.statfyr.commands.StatfyrCommand;
 import in.potenfyr.statfyr.compat.SchedulerCompat;
 import in.potenfyr.statfyr.config.ConfigManager;
+import in.potenfyr.statfyr.config.DashboardConfig;
 import in.potenfyr.statfyr.http.HttpServer;
 import in.potenfyr.statfyr.integrations.DiscordIntegration;
 import in.potenfyr.statfyr.integrations.NetworkPusher;
@@ -48,6 +49,7 @@ public final class Statfyr extends JavaPlugin {
     // -------------------------------------------------------------------------
 
     private ConfigManager configManager;
+    private DashboardConfig dashboardConfig;
     private StatsReader statsReader;
     private PlayerService playerService;
     private StatsManager statsManager;
@@ -144,6 +146,11 @@ public final class Statfyr extends JavaPlugin {
 
         // Config
         configManager = new ConfigManager(this);
+
+        // Dashboard config (separate dashboard.yml)
+        dashboardConfig = new DashboardConfig(this);
+
+        dashboardConfig.load();
 
         // Shared async executor
         executorService =
@@ -252,6 +259,7 @@ public final class Statfyr extends JavaPlugin {
 
         reloadConfig();
         configManager.reload();
+        dashboardConfig.load();
         messages.reload();
         analytics.reloadSettings();
 
@@ -401,6 +409,10 @@ public final class Statfyr extends JavaPlugin {
 
     public ConfigManager getConfigManager() {
         return configManager;
+    }
+
+    public DashboardConfig getDashboardConfig() {
+        return dashboardConfig;
     }
 
     public StatsReader getStatsReader() {

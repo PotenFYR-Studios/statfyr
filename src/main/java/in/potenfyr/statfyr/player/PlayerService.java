@@ -34,6 +34,19 @@ public final class PlayerService {
             cachedNames =
             new ConcurrentHashMap<>();
 
+    /**
+     * Insertion order used to evict the oldest names once the cache grows
+     * past {@link #NAME_CACHE_LIMIT}; the cache must not grow without bound
+     * on servers with many unique visitors.
+     */
+    private final java.util.Deque<UUID> cacheOrder =
+            new java.util.concurrent.ConcurrentLinkedDeque<>();
+
+    /**
+     * Maximum number of cached player names.
+     */
+    private static final int NAME_CACHE_LIMIT = 5_000;
+
     public PlayerService(Statfyr plugin) {
 
         this.plugin = plugin;
@@ -239,10 +252,25 @@ public final class PlayerService {
             return;
         }
 
-        cachedNames.put(
+        if (cachedNames.put(
                 player.getUniqueId(),
                 player.getName()
-        );
+        ) == null) {
+
+            cacheOrder.addLast(player.getUniqueId());
+
+            while (cacheOrder.size() > NAME_CACHE_LIMIT) {
+
+                UUID oldest =
+                        cacheOrder.pollFirst();
+
+                if (oldest == null) {
+                    break;
+                }
+
+                cachedNames.remove(oldest);
+            }
+        }
     }
 
     // -------------------------------------------------------------------------

@@ -428,6 +428,191 @@ public final class PlayerSummaryHandler implements HttpHandler {
         }
 
         // ---------------------------------------------------------------------
+        // Analytics (profiles: playtime buckets, sessions, rank, segment)
+        // ---------------------------------------------------------------------
+
+        in.potenfyr.statfyr.analytics.AnalyticsManager analytics =
+                plugin.getAnalytics();
+
+        if (analytics != null) {
+
+            in.potenfyr.statfyr.analytics.PlayerProfile profile =
+                    analytics.profileIfPresent(playerUuid);
+
+            JsonBuilder analyticsSection =
+                    new JsonBuilder()
+
+                            .add(
+                                    "playtime_seconds",
+                                    profile == null
+                                            ? 0L
+                                            : profile.totalPlaytimeSeconds
+                            )
+
+                            .add(
+                                    "playtime_formatted",
+                                    profile == null
+                                            ? "0m"
+                                            : in.potenfyr.statfyr.util.TimeFormat.duration(
+                                            profile.totalPlaytimeSeconds)
+                            )
+
+                            .add(
+                                    "active_seconds",
+                                    profile == null
+                                            ? 0L
+                                            : profile.activeSeconds
+                            )
+
+                            .add(
+                                    "afk_seconds",
+                                    profile == null
+                                            ? 0L
+                                            : profile.afkSeconds
+                            )
+
+                            .add(
+                                    "sessions",
+                                    profile == null
+                                            ? 0
+                                            : profile.totalSessions
+                            )
+
+                            .add(
+                                    "longest_session_seconds",
+                                    profile == null
+                                            ? 0L
+                                            : profile.longestSessionSeconds
+                            )
+
+                            .add(
+                                    "first_seen",
+                                    profile == null || profile.firstSeen <= 0L
+                                            ? null
+                                            : Instant.ofEpochMilli(profile.firstSeen)
+                                            .toString()
+                            )
+
+                            .add(
+                                    "last_seen",
+                                    profile == null || profile.lastSeen <= 0L
+                                            ? null
+                                            : Instant.ofEpochMilli(profile.lastSeen)
+                                            .toString()
+                            )
+
+                            .add(
+                                    "kdr",
+                                    analytics.kdr(playerUuid)
+                            )
+
+                            .add(
+                                    "segment",
+                                    profile == null
+                                            ? "unknown"
+                                            : analytics.segment(profile)
+                            );
+
+            // Leaderboard ranks for the stats players actually ask about.
+            in.potenfyr.statfyr.analytics.Period allTime =
+                    in.potenfyr.statfyr.analytics.Period.ALL_TIME;
+
+            analyticsSection.add(
+                    "rank_playtime",
+                    analytics.rank(playerUuid, "playtime", allTime)
+            );
+
+            analyticsSection.add(
+                    "rank_kills",
+                    analytics.rank(playerUuid, "kills", allTime)
+            );
+
+            analyticsSection.add(
+                    "rank_blocks_mined",
+                    analytics.rank(playerUuid, "blocks_mined", allTime)
+            );
+
+            response.add(
+                    "analytics",
+                    analyticsSection.buildMap()
+            );
+        }
+
+        // ---------------------------------------------------------------------
+        // Favorites (most mined block, most killed mob, most used item)
+        // ---------------------------------------------------------------------
+
+        Map<String, Long> minedMap =
+                playerStats.getMinedBlocks();
+
+        String favoriteBlock =
+                topKey(minedMap);
+
+        Map<String, Long> killedMap =
+                playerStats.getKilledEntities();
+
+        String favoriteMob =
+                topKey(killedMap);
+
+        Map<String, Long> usedMap =
+                playerStats.getUsedItems();
+
+        String favoriteItem =
+                topKey(usedMap);
+
+        Map<String, Long> craftedMap =
+                playerStats.getCraftedItems();
+
+        JsonBuilder favorites =
+                new JsonBuilder()
+
+                        .add(
+                                "block",
+                                favoriteBlock
+                        )
+
+                        .add(
+                                "block_count",
+                                favoriteBlock == null
+                                        ? 0L
+                                        : minedMap.get(favoriteBlock)
+                        )
+
+                        .add(
+                                "mob",
+                                favoriteMob
+                        )
+
+                        .add(
+                                "mob_count",
+                                favoriteMob == null
+                                        ? 0L
+                                        : killedMap.get(favoriteMob)
+                        )
+
+                        .add(
+                                "item",
+                                favoriteItem
+                        )
+
+                        .add(
+                                "item_count",
+                                favoriteItem == null
+                                        ? 0L
+                                        : usedMap.get(favoriteItem)
+                        )
+
+                        .add(
+                                "crafted_item",
+                                topKey(craftedMap)
+                        );
+
+        response.add(
+                "favorites",
+                favorites.buildMap()
+        );
+
+        // ---------------------------------------------------------------------
         // Metadata
         // ---------------------------------------------------------------------
 
@@ -554,5 +739,36 @@ public final class PlayerSummaryHandler implements HttpHandler {
         return path.substring(
                 lastSlash + 1
         );
+    }
+
+    /**
+     * @param map category counts keyed by minecraft namespaced id
+     * @return the key with the highest count, or {@code null} when empty
+     */
+    private static String topKey(Map<String, Long> map) {
+
+        if (map == null || map.isEmpty()) {
+            return null;
+        }
+
+        String best =
+                null;
+
+        long bestValue =
+                0L;
+
+        for (Map.Entry<String, Long> entry : map.entrySet()) {
+
+            Long value =
+                    entry.getValue();
+
+            if (value != null && value > bestValue) {
+
+                bestValue = value;
+                best = entry.getKey();
+            }
+        }
+
+        return best;
     }
 }

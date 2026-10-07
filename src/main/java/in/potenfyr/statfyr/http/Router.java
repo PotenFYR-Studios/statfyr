@@ -8,10 +8,14 @@ import in.potenfyr.statfyr.util.ResponseUtil;
 
 import java.io.IOException;
 import java.net.InetAddress;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 
 /**
@@ -27,6 +31,11 @@ import java.util.logging.Level;
 public final class Router implements HttpHandler {
 
     /**
+     * How often expired rate-limit entries are swept.
+     */
+    private static final long RATE_LIMIT_SWEEP_INTERVAL_MS = 60_000L;
+
+    /**
      * Longest prefix match wins.
      */
     private final LinkedHashMap<String, HttpHandler> routes =
@@ -40,6 +49,15 @@ public final class Router implements HttpHandler {
     private final ConcurrentHashMap<String, RateLimitEntry>
             rateLimitMap =
             new ConcurrentHashMap<>();
+
+    /**
+     * Guards the periodic rate-limit sweep so it runs on one thread at a time.
+     */
+    private final AtomicBoolean sweeping =
+            new AtomicBoolean(false);
+
+    private volatile long lastSweepAt =
+            System.currentTimeMillis();
 
     public Router(Statfyr plugin) {
 
@@ -88,8 +106,13 @@ public final class Router implements HttpHandler {
                 return;
             }
 
-            // GET only
-            if (!"GET".equalsIgnoreCase(
+            // GET only (HEAD is answered with the same status and no body)
+            boolean isHead =
+                    "HEAD".equalsIgnoreCase(
+                            exchange.getRequestMethod()
+                    );
+
+            if (!isHead && !"GET".equalsIgnoreCase(
                     exchange.getRequestMethod()
             )) {
 
@@ -99,6 +122,11 @@ public final class Router implements HttpHandler {
 
                 return;
             }
+
+            exchange.setAttribute(
+                    "statfyr.head",
+                    Boolean.valueOf(isHead)
+            );
 
             // IP whitelist
             if (!isIpAllowed(exchange)) {
@@ -250,13 +278,14 @@ public final class Router implements HttpHandler {
             return false;
         }
 
-        String expectedToken =
-                "Bearer "
-                        + config.getApiKey();
+        byte[] provided =
+                authorization.getBytes(StandardCharsets.UTF_8);
 
-        return expectedToken.equals(
-                authorization
-        );
+        byte[] expected =
+                ("Bearer " + config.getApiKey())
+                        .getBytes(StandardCharsets.UTF_8);
+
+        return MessageDigest.isEqual(provided, expected);
     }
 
     // -------------------------------------------------------------------------
@@ -286,6 +315,8 @@ public final class Router implements HttpHandler {
                         ignored -> new RateLimitEntry()
                 );
 
+        boolean allowed;
+
         synchronized (entry) {
 
             long elapsed =
@@ -301,8 +332,61 @@ public final class Router implements HttpHandler {
 
             entry.requests++;
 
-            return entry.requests
+            allowed = entry.requests
                     <= config.getRateLimitRequests();
+        }
+
+        sweepRateLimits(now);
+
+        return allowed;
+    }
+
+    /**
+     * Periodically removes rate-limit entries whose window has expired so the
+     * map cannot grow without bound (one entry per client IP otherwise).
+     */
+    private void sweepRateLimits(long now) {
+
+        if (now - lastSweepAt
+                < RATE_LIMIT_SWEEP_INTERVAL_MS) {
+            return;
+        }
+
+        if (!sweeping.compareAndSet(false, true)) {
+            return;
+        }
+
+        lastSweepAt = now;
+
+        try {
+
+            long windowMs =
+                    plugin.getConfigManager()
+                            .getRateLimitWindowSeconds()
+                            * 1000L;
+
+            Iterator<Map.Entry<String, RateLimitEntry>> iterator =
+                    rateLimitMap.entrySet().iterator();
+
+            while (iterator.hasNext()) {
+
+                Map.Entry<String, RateLimitEntry> mapEntry =
+                        iterator.next();
+
+                RateLimitEntry entry =
+                        mapEntry.getValue();
+
+                synchronized (entry) {
+
+                    if (now - entry.windowStart > windowMs * 2L) {
+                        iterator.remove();
+                    }
+                }
+            }
+
+        } finally {
+
+            sweeping.set(false);
         }
     }
 
@@ -360,9 +444,28 @@ public final class Router implements HttpHandler {
             return;
         }
 
+        String origin =
+                exchange.getRequestHeaders()
+                        .getFirst("Origin");
+
+        String allowed =
+                resolveAllowedOrigin(config, origin);
+
+        if (allowed == null) {
+
+            // Origin not on the whitelist: send no CORS headers so the
+            // browser blocks the request.
+            return;
+        }
+
         exchange.getResponseHeaders().set(
                 "Access-Control-Allow-Origin",
-                "*"
+                allowed
+        );
+
+        exchange.getResponseHeaders().set(
+                "Vary",
+                "Origin"
         );
 
         exchange.getResponseHeaders().set(
@@ -374,6 +477,33 @@ public final class Router implements HttpHandler {
                 "Access-Control-Allow-Headers",
                 "Authorization, Content-Type"
         );
+    }
+
+    /**
+     * @param config active configuration
+     * @param origin request Origin header (may be null)
+     * @return the value to echo back, or {@code null} when the origin is not
+     *         allowed. A {@code "*"} entry in the whitelist allows everything.
+     */
+    private static String resolveAllowedOrigin(
+            ConfigManager config,
+            String origin
+    ) {
+
+        if (origin == null || origin.isEmpty()) {
+
+            // Non-browser client (curl, HTTP libs): CORS is irrelevant.
+            return "*";
+        }
+
+        for (String allowed : config.getAllowedOrigins()) {
+
+            if ("*".equals(allowed) || allowed.equalsIgnoreCase(origin)) {
+                return origin;
+            }
+        }
+
+        return null;
     }
 
     // -------------------------------------------------------------------------
