@@ -6,20 +6,14 @@ import in.potenfyr.statfyr.analytics.AnalyticsManager;
 import in.potenfyr.statfyr.analytics.Metrics;
 import in.potenfyr.statfyr.analytics.PlayerProfile;
 import in.potenfyr.statfyr.compat.ServerVersion;
-import in.potenfyr.statfyr.compat.StatisticCompat;
 import in.potenfyr.statfyr.model.PlayerStats;
+import in.potenfyr.statfyr.player.PlayerStateManager;
 import org.bukkit.Bukkit;
-import org.bukkit.Material;
-import org.bukkit.Statistic;
-import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 
-import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -27,71 +21,78 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * <p>Responsibilities:
  * <ul>
- *     <li>live player stat collection</li>
- *     <li>offline stat caching</li>
- *     <li>async stat loading</li>
- *     <li>cache expiration</li>
- *     <li>periodic refresh</li>
+ *     <li>live player stat collection (real-time source for online players)</li>
+ *     <li>per-player state updates through {@link PlayerStateManager}</li>
+ *     <li>dirty marking and batched persistence hand-off</li>
+ *     <li>final synchronization on quit</li>
+ *     <li>offline stat resolution (persisted data first, stats file last)</li>
  * </ul>
  *
- * <p>Live collection is fully version agnostic: the statistic category is
- * derived from the stable enum name and material/entity filtering is resolved
- * through {@link StatisticCompat}. This keeps the same binary working on
- * Minecraft 1.8.x through 26.x across Bukkit, Spigot, Paper, Purpur and Folia.
+ * <p><strong>Source-of-truth model:</strong> Minecraft's
+ * {@code world/stats/<uuid>.json} files are NOT a real-time source — the game
+ * flushes them lazily. Online players are read through the live
+ * {@code Player#getStatistic(...)} API on the main thread at a short,
+ * configurable interval (default 1s). Results flow into the player's
+ * {@code PlayerState} under the player's UUID lock, and only then into the
+ * analytics profile and persistence queue. The stats JSON files are used
+ * solely for initial import, recovery and as a last-resort offline fallback.
  *
- * <p><strong>Threading:</strong> vanilla statistics are plain hash maps
- * mutated by the server thread. Reading them from an async task races with
- * the server's own writes and breaks (which previously killed the refresh
- * task silently, freezing every stat until the player relogged). Collection
- * therefore runs on the main thread on a short interval and HTTP threads only
- * ever read the resulting immutable snapshots from {@link #cache}.
- *
- * <p>When a player quits, their cache entry is removed so the next request
- * re-reads the stats file the server just flushed to disk, keeping offline
- * stats accurate too.
+ * <p><strong>Threading:</strong> the collector runs on the main thread
+ * (Folia: global region scheduler) because vanilla statistics are plain hash
+ * maps mutated by the server thread. Lock scopes are tiny: the collector
+ * takes the UUID lock only to swap the immutable snapshot into the state,
+ * never while doing I/O. Persistence happens asynchronously through the
+ * {@code PersistenceService} with per-player version checks, so a stale
+ * snapshot can never overwrite a newer one.
  */
 public final class StatsManager {
-
-    /**
-     * Cache TTL.
-     */
-    private static final long CACHE_TTL_MS =
-            30_000L;
-
-    /**
-     * How often live statistics are collected, in ticks (100 ticks = 5s).
-     */
-    private static final long UPDATE_INTERVAL_TICKS =
-            100L;
 
     private final Statfyr plugin;
 
     private final StatsReader statsReader;
 
     /**
-     * Main cache: uuid -> latest snapshot. Written by the main-thread
-     * collector, read by HTTP threads; {@link CachedStats} is immutable.
+     * Shared per-player state (locks + versions + live snapshots).
      */
-    private final ConcurrentHashMap<UUID, CachedStats>
-            cache =
-            new ConcurrentHashMap<>();
+    private final PlayerStateManager stateManager;
 
     /**
-     * Cache metrics.
+     * Interval between live collection passes, in ticks. Derived from the
+     * {@code collection.live-stats-interval-seconds} config value (1s
+     * default = 20 ticks).
      */
-    private final AtomicLong cacheHits =
-            new AtomicLong();
+    private final long updateIntervalTicks;
 
-    private final AtomicLong cacheMisses =
-            new AtomicLong();
+    /**
+     * Metrics.
+     */
+    private final AtomicLong cacheHits = new AtomicLong();
+
+    private final AtomicLong cacheMisses = new AtomicLong();
+
+    private volatile boolean started;
 
     public StatsManager(
             Statfyr plugin,
-            StatsReader statsReader
+            StatsReader statsReader,
+            PlayerStateManager stateManager
     ) {
 
         this.plugin = plugin;
         this.statsReader = statsReader;
+        this.stateManager = stateManager;
+
+        long seconds =
+                Math.max(
+                        1L,
+                        plugin.getConfig()
+                                .getLong(
+                                        "collection.live-stats-interval-seconds",
+                                        1L
+                                )
+                );
+
+        this.updateIntervalTicks = seconds * 20L;
     }
 
     // -------------------------------------------------------------------------
@@ -100,200 +101,222 @@ public final class StatsManager {
 
     public void start() {
 
+        if (started) {
+            return;
+        }
+
+        started = true;
+
         /*
          * Vanilla statistic maps are mutated by the server thread, so the
          * collector must run there. The task is cheap: one pass over each
-         * online player's stat maps every 5 seconds, no I/O.
+         * online player's stat maps, no I/O.
          */
         SchedulerCompat.runSyncRepeating(
                 plugin,
                 this::refreshOnlinePlayers,
-                20L,
-                UPDATE_INTERVAL_TICKS
-        );
-
-        SchedulerCompat.runAsyncRepeating(
-                plugin,
-                this::cleanupExpiredCache,
-                20L * 60L,
-                20L * 60L
+                updateIntervalTicks,
+                updateIntervalTicks
         );
 
         plugin.getLogger().info(
                 "StatsManager started on "
                         + ServerVersion.getPlatformLabel()
+                        + " (live interval "
+                        + (updateIntervalTicks / 20L)
+                        + "s)"
         );
     }
 
-    /**
-     * Removes a player's live snapshot. Called on quit so the next request
-     * falls through to the stats file the server just flushed to disk.
-     *
-     * @param uuid uuid of the player that left
-     */
-    public void invalidate(UUID uuid) {
+    // -------------------------------------------------------------------------
+    // Lifecycle events
+    // -------------------------------------------------------------------------
 
-        if (uuid != null) {
-            cache.remove(uuid);
+    /**
+     * Prepares live tracking for a joining player. Called on the main thread
+     * from the join handler.
+     *
+     * @param uuid joining player's UUID
+     * @param name joining player's current name ({@code Player#getName()})
+     */
+    public void onJoin(UUID uuid, String name) {
+
+        stateManager.lock(uuid);
+
+        try {
+
+            stateManager.markOnline(uuid, name);
+
+        } finally {
+
+            stateManager.unlock(uuid);
+        }
+    }
+
+    /**
+     * Final live synchronization for a quitting player: the very last live
+     * statistics (taken on the main thread while the player object is still
+     * valid) are written into the player state and scheduled for immediate
+     * persistence before the state is marked offline.
+     *
+     * <p>After this call the persisted state represents the latest available
+     * live state; the player stays fully queryable through the API.
+     *
+     * @param uuid leaving player's UUID
+     * @param name leaving player's name
+     */
+    public void onQuit(UUID uuid, String name) {
+
+        // 1. Final live read + state update + persist request (under lock).
+        stateManager.lock(uuid);
+
+        try {
+
+            PlayerStateSnapshot snapshot =
+                    readLiveUnderLock(uuid, name);
+
+            if (snapshot != null) {
+
+                // High priority: goes to the front of the next drain.
+                plugin.getPersistenceService()
+                        .submit(uuid, snapshot.version());
+            }
+
+        } finally {
+
+            stateManager.unlock(uuid);
+        }
+
+        // 2. Mark offline (own lock scope, never overlapping I/O).
+        stateManager.lock(uuid);
+
+        try {
+
+            stateManager.markOffline(uuid);
+
+        } finally {
+
+            stateManager.unlock(uuid);
+        }
+    }
+
+    /**
+     * Reads the player's live statistics into their state; must be called on
+     * the main thread (e.g. from the quit handler). Returns the resulting
+     * state version so the caller can schedule persistence.
+     */
+    private PlayerStateSnapshot readLiveUnderLock(UUID uuid, String name) {
+
+        Player player = Bukkit.getPlayer(uuid);
+
+        if (player == null) {
+            return null;
+        }
+
+        PlayerStats stats = LiveStatisticsReader.read(player);
+
+        PlayerStateManager.PlayerState state =
+                stateManager.updateStatistics(uuid, stats);
+
+        if (state == null) {
+
+            state = stateManager.loadOrCreate(uuid, name, false);
+
+            state = stateManager.updateStatistics(uuid, stats);
+        }
+
+        return state == null
+                ? null
+                : new PlayerStateSnapshot(state.uuid(), state.version());
+    }
+
+    /**
+     * Simple (uuid, version) tuple used for persistence hand-off.
+     */
+    private static final class PlayerStateSnapshot {
+
+        private final UUID uuid;
+
+        private final long version;
+
+        PlayerStateSnapshot(UUID uuid, long version) {
+
+            this.uuid = uuid;
+            this.version = version;
+        }
+
+        UUID uuid() {
+            return uuid;
+        }
+
+        long version() {
+            return version;
         }
     }
 
     // -------------------------------------------------------------------------
-    // Main Access
+    // Main access: resolves stats for any player, online or offline
     // -------------------------------------------------------------------------
 
-    public PlayerStats getPlayerStats(
-            UUID uuid
-    ) {
+    /**
+     * Returns the latest statistics for a player.
+     *
+     * <p>Online players resolve from the live {@code PlayerState} maintained
+     * by the collector (at most one collection interval old). Offline players
+     * resolve from the persisted analytics profile (updated by the batched
+     * persistence pipeline), falling back to the vanilla stats file only when
+     * no persisted data exists (e.g. first import or recovery).
+     *
+     * @param uuid player UUID
+     * @return latest available statistics, or {@code null}
+     */
+    public PlayerStats getPlayerStats(UUID uuid) {
 
         if (uuid == null) {
             return null;
         }
 
-        CachedStats cached =
-                cache.get(uuid);
+        PlayerStateManager.PlayerState state =
+                stateManager.state(uuid);
 
-        if (cached != null
-                && !cached.isExpired()) {
+        // LIVE PLAYER: latest in-memory snapshot (never blocks, never reads
+        // the stats JSON file).
+        if (state != null && state.online() && state.statistics() != null) {
 
             cacheHits.incrementAndGet();
 
-            return cached.stats;
+            return state.statistics();
         }
 
         cacheMisses.incrementAndGet();
 
-        Player onlinePlayer =
-                Bukkit.getPlayer(uuid);
+        // OFFLINE PLAYER: persisted Statfyr state first (live-state merged
+        // with the analytics profile), then the vanilla stats file as a
+        // recovery/import fallback.
+        AnalyticsManager analytics =
+                plugin.getAnalytics();
 
-        PlayerStats stats;
+        PlayerStats stats =
+                analytics == null
+                        ? null
+                        : analytics.getOfflinePlayerStats(uuid);
 
-        // LIVE PLAYER
-        if (onlinePlayer != null
-                && onlinePlayer.isOnline()) {
+        if (stats == null) {
 
             stats =
-                    readLiveStats(onlinePlayer);
-
-        } else {
-
-            // OFFLINE PLAYER: Try vanilla stats file first, then analytics profile
-            stats =
-                    statsReader.readStats(
-                            uuid,
-                            null
-                    );
-
-            // If vanilla stats are empty, check analytics profile for accumulated data
-            if (isStatsEmpty(stats)) {
-
-                PlayerProfile profile =
-                        plugin.getAnalytics()
-                                .profileIfPresent(uuid);
-
-                if (profile != null) {
-
-                    stats =
-                            convertProfileToStats(
-                                    profile,
-                                    uuid
-                            );
-                }
-            }
+                    statsReader.readStats(uuid, null);
         }
-
-        cache.put(
-                uuid,
-                new CachedStats(stats)
-        );
 
         return stats;
     }
 
     /**
-     * Checks if a PlayerStats object has no meaningful data.
+     * Async variant of {@link #getPlayerStats(UUID)} for HTTP workers.
+     *
+     * @param uuid player UUID
+     * @return future resolving to the latest statistics
      */
-    private boolean isStatsEmpty(PlayerStats stats) {
-
-        if (stats == null) {
-            return true;
-        }
-
-        // Check if rawStats is empty
-        if (stats.getRawStats() == null || stats.getRawStats().isEmpty()) {
-            return true;
-        }
-
-        // Check if all categories are empty
-        for (Map<String, Long> category : stats.getRawStats().values()) {
-            if (!category.isEmpty()) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * Converts an analytics profile to PlayerStats for offline players.
-     * This provides stats for players who don't have vanilla stats files
-     * or whose stats files are empty.
-     */
-    private PlayerStats convertProfileToStats(
-            PlayerProfile profile,
-            UUID uuid
-    ) {
-
-        Map<String, Map<String, Long>> rawStats =
-                new HashMap<>();
-
-        // Add profile metrics as raw stats in the custom category
-        Map<String, Long> metricsMap =
-                new HashMap<>();
-
-        for (String key : Metrics.leaderboardKeys()) {
-
-            long value =
-                    profile.total(key);
-
-            if (value > 0) {
-                metricsMap.put(key, value);
-            }
-        }
-
-        // Add active/AFK time and sessions from profile
-        metricsMap.put(
-                Metrics.ACTIVE_TIME,
-                profile.activeSeconds
-        );
-        metricsMap.put(
-                Metrics.AFK_TIME,
-                profile.afkSeconds
-        );
-        metricsMap.put(
-                Metrics.SESSIONS,
-                (long) profile.totalSessions
-        );
-
-        if (!metricsMap.isEmpty()) {
-            rawStats.put(StatKeys.CATEGORY_CUSTOM, metricsMap);
-        }
-
-        return new PlayerStats(
-                uuid,
-                profile.name,
-                rawStats
-        );
-    }
-
-    // -------------------------------------------------------------------------
-    // Async Access
-    // -------------------------------------------------------------------------
-
-    public CompletableFuture<PlayerStats>
-    getPlayerStatsAsync(
-            UUID uuid
-    ) {
+    public CompletableFuture<PlayerStats> getPlayerStatsAsync(UUID uuid) {
 
         return CompletableFuture.supplyAsync(
                 () -> getPlayerStats(uuid),
@@ -305,37 +328,59 @@ public final class StatsManager {
     // Refresh (main thread)
     // -------------------------------------------------------------------------
 
+    /**
+     * One collector pass: read live statistics for every online player,
+     * update their {@code PlayerState} under the per-UUID lock, mark the
+     * state dirty and hand the new version to the batched persistence
+     * pipeline. Nothing here touches disk or network.
+     */
     private void refreshOnlinePlayers() {
 
         for (Player player
                 : Bukkit.getOnlinePlayers()) {
 
+            UUID uuid =
+                    player.getUniqueId();
+
             try {
 
-                PlayerStats stats =
-                        readLiveStats(player);
+                PlayerStats live =
+                        LiveStatisticsReader.read(player);
 
-                if (stats != null) {
+                stateManager.lock(uuid);
 
-                    cache.put(
-                            player.getUniqueId(),
-                            new CachedStats(stats)
-                    );
+                try {
 
-                    // Update analytics profile with raw stat snapshot
-                    // This preserves item breakdowns for offline players
-                    PlayerProfile profile =
-                            plugin.getAnalytics()
-                                    .profileIfPresent(player.getUniqueId());
+                    PlayerStateManager.PlayerState state =
+                            stateManager.updateStatistics(uuid, live);
 
-                    if (profile != null) {
-                        profile.addStatSnapshot(stats.getRawStats());
+                    if (state == null) {
+                        state =
+                                stateManager.loadOrCreate(
+                                        uuid,
+                                        player.getName(),
+                                        true
+                                );
 
-                        // Also update profile's allTime metrics with live data
-                        // This ensures the profile stays current while player is online
-                        updateProfileMetricsFromLiveStats(profile, stats);
+                        state =
+                                stateManager.updateStatistics(uuid, live);
                     }
+
+                    if (state != null && state.dirty()) {
+
+                        plugin.getPersistenceService()
+                                .submit(uuid, state.version());
+                    }
+
+                } finally {
+
+                    stateManager.unlock(uuid);
                 }
+
+                // Feed the analytics profile outside the UUID lock (the
+                // profile has its own synchronisation and this call performs
+                // MAX-merging only).
+                feedProfile(player, live);
 
             } catch (Throwable throwable) {
 
@@ -354,287 +399,56 @@ public final class StatsManager {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Live Reading
-    // -------------------------------------------------------------------------
+    /**
+     * MAX-merges the live snapshot into the player's analytics profile so
+     * allTime metrics and item breakdowns stay current while the player is
+     * online. Runs outside the UUID lock; {@code PlayerProfile} uses
+     * concurrent maps internally.
+     */
+    private void feedProfile(Player player, PlayerStats live) {
 
-    private PlayerStats readLiveStats(
-            Player player
-    ) {
+        AnalyticsManager analytics =
+                plugin.getAnalytics();
 
-        Map<String, Map<String, Long>> stats =
-                new HashMap<>();
-
-        Map<String, Long> custom =
-                new HashMap<>();
-
-        Map<String, Long> mined =
-                new HashMap<>();
-
-        Map<String, Long> crafted =
-                new HashMap<>();
-
-        Map<String, Long> used =
-                new HashMap<>();
-
-        Map<String, Long> broken =
-                new HashMap<>();
-
-        Map<String, Long> pickedUp =
-                new HashMap<>();
-
-        Map<String, Long> dropped =
-                new HashMap<>();
-
-        Map<String, Long> killed =
-                new HashMap<>();
-
-        Map<String, Long> killedBy =
-                new HashMap<>();
-
-        Material[] itemMaterials =
-                StatisticCompat.getItemMaterials();
-
-        Material[] blockMaterials =
-                StatisticCompat.getBlockMaterials();
-
-        EntityType[] entityTypes =
-                StatisticCompat.getLivingEntityTypes();
-
-        for (Statistic statistic
-                : Statistic.values()) {
-
-            try {
-
-                String category =
-                        StatisticCompat.categoryOf(statistic);
-
-                if (StatisticCompat.UNTYPED.equals(category)) {
-
-                    collectUntyped(
-                            player,
-                            statistic,
-                            custom
-                    );
-
-                } else if (StatisticCompat.BLOCK.equals(category)) {
-
-                    collectMaterials(
-                            player,
-                            statistic,
-                            blockMaterials,
-                            mined
-                    );
-
-                } else if (StatisticCompat.ITEM.equals(category)) {
-
-                    collectMaterials(
-                            player,
-                            statistic,
-                            itemMaterials,
-                            itemTarget(statistic, crafted, used, broken, pickedUp, dropped)
-                    );
-
-                } else if (StatisticCompat.ENTITY.equals(category)) {
-
-                    collectEntities(
-                            player,
-                            statistic,
-                            entityTypes,
-                            entityTarget(statistic, killed, killedBy)
-                    );
-                }
-
-            } catch (Throwable ignored) {
-                // One bad statistic must never break the whole snapshot.
-            }
-        }
-
-        stats.put(StatKeys.CATEGORY_CUSTOM, custom);
-        stats.put(StatKeys.CATEGORY_MINED, mined);
-        stats.put(StatKeys.CATEGORY_CRAFTED, crafted);
-        stats.put(StatKeys.CATEGORY_USED, used);
-        stats.put(StatKeys.CATEGORY_BROKEN, broken);
-        stats.put(StatKeys.CATEGORY_PICKED_UP, pickedUp);
-        stats.put(StatKeys.CATEGORY_DROPPED, dropped);
-        stats.put(StatKeys.CATEGORY_KILLED, killed);
-        stats.put(StatKeys.CATEGORY_KILLED_BY, killedBy);
-
-        return new PlayerStats(
-                player.getUniqueId(),
-                player.getName(),
-                stats
-        );
-    }
-
-    // -------------------------------------------------------------------------
-    // Collection helpers
-    // -------------------------------------------------------------------------
-
-    private void collectUntyped(
-            Player player,
-            Statistic statistic,
-            Map<String, Long> target
-    ) {
-
-        int value =
-                player.getStatistic(statistic);
-
-        if (value <= 0) {
+        if (analytics == null) {
             return;
         }
 
-        String key =
-                StatisticCompat.isPlayTime(statistic)
-                        ? StatKeys.PLAY_TIME
-                        : "minecraft:" + statistic.name()
-                        .toLowerCase(Locale.ROOT);
+        PlayerProfile profile =
+                analytics.profileIfPresent(player.getUniqueId());
 
-        target.put(
-                key,
-                (long) value
-        );
-    }
-
-    private void collectMaterials(
-            Player player,
-            Statistic statistic,
-            Material[] materials,
-            Map<String, Long> target
-    ) {
-
-        if (target == null) {
+        if (profile == null) {
             return;
         }
 
-        for (Material material : materials) {
+        profile.addStatSnapshot(live.getRawStats());
 
-            try {
+        Map<String, Map<String, Long>> rawStats =
+                live.getRawStats();
 
-                int value =
-                        player.getStatistic(
-                                statistic,
-                                material
-                        );
+        Map<String, Long> customStats =
+                rawStats.get(StatKeys.CATEGORY_CUSTOM);
 
-                if (value <= 0) {
-                    continue;
-                }
-
-                target.put(
-                        "minecraft:"
-                                + material.name()
-                                .toLowerCase(Locale.ROOT),
-                        (long) value
-                );
-
-            } catch (Throwable ignored) {
-                // Material is not valid for this statistic on this version.
-            }
-        }
-    }
-
-    private void collectEntities(
-            Player player,
-            Statistic statistic,
-            EntityType[] entityTypes,
-            Map<String, Long> target
-    ) {
-
-        if (target == null) {
+        if (customStats == null) {
             return;
         }
 
-        for (EntityType entityType : entityTypes) {
+        for (Map.Entry<String, Long> entry : customStats.entrySet()) {
 
-            try {
+            String key = entry.getKey();
+            Long value = entry.getValue();
 
-                int value =
-                        player.getStatistic(
-                                statistic,
-                                entityType
-                        );
+            if (key == null || value == null) {
+                continue;
+            }
 
-                if (value <= 0) {
-                    continue;
-                }
+            long existing =
+                    profile.allTime(key);
 
-                target.put(
-                        "minecraft:"
-                                + entityType.name()
-                                .toLowerCase(Locale.ROOT),
-                        (long) value
-                );
-
-            } catch (Throwable ignored) {
-                // Entity type is not valid for this statistic on this version.
+            if (value > existing) {
+                profile.allTime.put(key, value);
             }
         }
-    }
-
-    private Map<String, Long> itemTarget(
-            Statistic statistic,
-            Map<String, Long> crafted,
-            Map<String, Long> used,
-            Map<String, Long> broken,
-            Map<String, Long> pickedUp,
-            Map<String, Long> dropped
-    ) {
-
-        switch (statistic.name()) {
-
-            case "CRAFT_ITEM":
-                return crafted;
-
-            case "USE_ITEM":
-                return used;
-
-            case "BREAK_ITEM":
-                return broken;
-
-            case "PICKUP":
-                return pickedUp;
-
-            case "DROP":
-                return dropped;
-
-            default:
-                return null;
-        }
-    }
-
-    private Map<String, Long> entityTarget(
-            Statistic statistic,
-            Map<String, Long> killed,
-            Map<String, Long> killedBy
-    ) {
-
-        switch (statistic.name()) {
-
-            case "KILL_ENTITY":
-                return killed;
-
-            case "ENTITY_KILLED_BY":
-                return killedBy;
-
-            default:
-                return null;
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // Cache Cleanup
-    // -------------------------------------------------------------------------
-
-    private void cleanupExpiredCache() {
-
-        long now =
-                System.currentTimeMillis();
-
-        cache.entrySet().removeIf(entry ->
-                now - entry.getValue().timestamp
-                        > CACHE_TTL_MS
-        );
     }
 
     // -------------------------------------------------------------------------
@@ -642,7 +456,7 @@ public final class StatsManager {
     // -------------------------------------------------------------------------
 
     public int getCacheSize() {
-        return cache.size();
+        return stateManager.stateCount();
     }
 
     public long getCacheHits() {
@@ -654,72 +468,10 @@ public final class StatsManager {
     }
 
     public void clearCache() {
-        cache.clear();
+        // Live state is authoritative; nothing to clear. Kept for API compat.
     }
 
-    /**
-     * Updates the profile's allTime metrics with live stats data.
-     * Takes the MAX of existing profile data and live stats.
-     * This ensures the profile stays current while the player is online.
-     */
-    private void updateProfileMetricsFromLiveStats(
-            PlayerProfile profile,
-            PlayerStats liveStats
-    ) {
-
-        if (profile == null || liveStats == null) {
-            return;
-        }
-
-        Map<String, Map<String, Long>> rawStats =
-                liveStats.getRawStats();
-
-        if (rawStats == null || rawStats.isEmpty()) {
-            return;
-        }
-
-        // Update allTime metrics from live stats
-        Map<String, Long> customStats =
-                rawStats.get(StatKeys.CATEGORY_CUSTOM);
-
-        if (customStats != null) {
-            for (Map.Entry<String, Long> entry : customStats.entrySet()) {
-                String key = entry.getKey();
-                Long value = entry.getValue();
-
-                // Update profile allTime with MAX of existing and live value
-                long existing = profile.allTime(key);
-                if (value > existing) {
-                    profile.allTime.put(key, value);
-                }
-            }
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // Cached Entry
-    // -------------------------------------------------------------------------
-
-    private static final class CachedStats {
-
-        private final PlayerStats stats;
-
-        private final long timestamp;
-
-        CachedStats(
-                PlayerStats stats
-        ) {
-
-            this.stats = stats;
-            this.timestamp =
-                    System.currentTimeMillis();
-        }
-
-        boolean isExpired() {
-
-            return System.currentTimeMillis()
-                    - timestamp
-                    > CACHE_TTL_MS;
-        }
+    public int getLockCount() {
+        return stateManager.lockCount();
     }
 }

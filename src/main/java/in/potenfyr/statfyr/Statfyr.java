@@ -14,8 +14,10 @@ import in.potenfyr.statfyr.integrations.PlaceholderIntegration;
 import in.potenfyr.statfyr.integrations.VaultIntegration;
 import in.potenfyr.statfyr.listeners.PlayerListener;
 import in.potenfyr.statfyr.player.PlayerService;
+import in.potenfyr.statfyr.player.PlayerStateManager;
 import in.potenfyr.statfyr.stats.StatsManager;
 import in.potenfyr.statfyr.stats.StatsReader;
+import in.potenfyr.statfyr.storage.PersistenceService;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -52,7 +54,9 @@ public final class Statfyr extends JavaPlugin {
     private DashboardConfig dashboardConfig;
     private StatsReader statsReader;
     private PlayerService playerService;
+    private PlayerStateManager playerStateManager;
     private StatsManager statsManager;
+    private PersistenceService persistenceService;
     private AnalyticsManager analytics;
     private MessageService messages;
     private NetworkRegistry networkRegistry;
@@ -77,6 +81,8 @@ public final class Statfyr extends JavaPlugin {
     // -------------------------------------------------------------------------
 
     private ExecutorService executorService;
+
+    private java.util.concurrent.ScheduledExecutorService scheduler;
 
     // -------------------------------------------------------------------------
     // Lifecycle
@@ -131,6 +137,40 @@ public final class Statfyr extends JavaPlugin {
             }
         }
 
+        // Flush every pending write while the executors are still alive so
+        // the final live values reach storage before the process exits.
+        if (persistenceService != null) {
+
+            try {
+                persistenceService.stop();
+                persistenceService.flush();
+
+            } catch (Exception exception) {
+
+                getLogger().log(
+                        Level.WARNING,
+                        "Failed to flush pending player state",
+                        exception
+                );
+            }
+        }
+
+        if (analytics != null) {
+
+            try {
+                analytics.flushDirtyState();
+                analytics.closeStorage();
+
+            } catch (Exception exception) {
+
+                getLogger().log(
+                        Level.WARNING,
+                        "Failed to flush analytics state",
+                        exception
+                );
+            }
+        }
+
         shutdownHttp();
 
         shutdownExecutor();
@@ -162,19 +202,37 @@ public final class Statfyr extends JavaPlugin {
                         )
                 );
 
-        // Stats
+        // Dedicated scheduler for the persistence worker
+        scheduler =
+                Executors.newSingleThreadScheduledExecutor(runnable -> {
+
+                    Thread thread = new Thread(
+                            runnable,
+                            "Statfyr-Persistence"
+                    );
+
+                    thread.setDaemon(true);
+
+                    return thread;
+                });
+
+        // Per-player state: locks, versions and live snapshots
+        playerStateManager = new PlayerStateManager();
+
+        // Players
+        playerService = new PlayerService(this);
+
+        // Stats (live collector; interval from collection.live-stats-interval-seconds)
         statsReader = new StatsReader(this);
 
         statsManager =
                 new StatsManager(
                         this,
-                        statsReader
+                        statsReader,
+                        playerStateManager
                 );
 
         statsManager.start();
-
-        // Players
-        playerService = new PlayerService(this);
 
         // Analytics
         messages = new MessageService(this);
@@ -184,6 +242,51 @@ public final class Statfyr extends JavaPlugin {
         analytics = new AnalyticsManager(this);
         analytics.setMilestoneListener(this::onMilestone);
         analytics.start();
+
+        /*
+         * Batched persistence: drains dirty profiles + server state every
+         * few seconds on the shared executor. The exact interval is
+         * configurable (collection.persistence-interval-seconds).
+         */
+        long persistenceIntervalMillis =
+                Math.max(
+                        2L,
+                        getConfig().getLong(
+                                "collection.persistence-interval-seconds",
+                                5L
+                        )
+                ) * 1000L;
+
+        persistenceService =
+                new PersistenceService(
+                        persistenceIntervalMillis,
+                        (uuid, version) ->
+                                analytics.persistPlayer(uuid, version),
+                        getLogger()
+                );
+
+        persistenceService.start(scheduler);
+
+        // Also drain the analytics dirty queues on the same cadence.
+        scheduler.scheduleWithFixedDelay(
+                () -> {
+
+                    try {
+
+                        analytics.runPersistencePass();
+
+                    } catch (Throwable throwable) {
+
+                        getLogger().warning(
+                                "Analytics persistence pass failed: "
+                                        + throwable.getMessage()
+                        );
+                    }
+                },
+                persistenceIntervalMillis,
+                persistenceIntervalMillis,
+                java.util.concurrent.TimeUnit.MILLISECONDS
+        );
 
         // Commands
         StatfyrCommand command =
@@ -355,6 +458,28 @@ public final class Statfyr extends JavaPlugin {
 
     private void shutdownExecutor() {
 
+        if (scheduler != null) {
+
+            scheduler.shutdown();
+
+            try {
+
+                if (!scheduler.awaitTermination(
+                        5,
+                        TimeUnit.SECONDS
+                )) {
+
+                    scheduler.shutdownNow();
+                }
+
+            } catch (InterruptedException exception) {
+
+                scheduler.shutdownNow();
+
+                Thread.currentThread().interrupt();
+            }
+        }
+
         if (executorService == null) {
             return;
         }
@@ -425,6 +550,14 @@ public final class Statfyr extends JavaPlugin {
 
     public StatsManager getStatsManager() {
         return statsManager;
+    }
+
+    public PlayerStateManager getPlayerStateManager() {
+        return playerStateManager;
+    }
+
+    public PersistenceService getPersistenceService() {
+        return persistenceService;
     }
 
     public AnalyticsManager getAnalytics() {

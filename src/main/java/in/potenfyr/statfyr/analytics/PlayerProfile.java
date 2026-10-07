@@ -237,9 +237,13 @@ public final class PlayerProfile {
      * Adds a raw stat snapshot to the profile.
      * Snapshots are retained up to {@link #maxSnapshots}, with oldest evicted first.
      *
+     * <p>Synchronised because snapshots may be appended from the live stats
+     * collector (main thread) while HTTP threads read them via
+     * {@link #getMergedStats()}.
+     *
      * @param rawStats the raw stats map (category -> item -> count)
      */
-    public void addStatSnapshot(Map<String, Map<String, Long>> rawStats) {
+    public synchronized void addStatSnapshot(Map<String, Map<String, Long>> rawStats) {
 
         if (rawStats == null || rawStats.isEmpty()) {
             return;
@@ -269,7 +273,7 @@ public final class PlayerProfile {
      *
      * @return the latest snapshot, or null
      */
-    public Map<String, Map<String, Long>> getLatestSnapshot() {
+    public synchronized Map<String, Map<String, Long>> getLatestSnapshot() {
 
         if (statSnapshots.isEmpty()) {
             return null;

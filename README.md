@@ -188,6 +188,11 @@ security:
 pagination:
   default-limit: 25
   max-limit: 100
+
+collection:
+  snapshot-interval-seconds: 300       # history snapshot cadence
+  live-stats-interval-seconds: 1       # real-time reads for online players
+  persistence-interval-seconds: 5      # batched writes to storage
 ```
 
 **Environment variable overrides** (take precedence over the config file):

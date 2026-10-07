@@ -81,6 +81,9 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.10.2'
     // Gson is provided by the server at runtime; tests need it directly.
     testImplementation 'com.google.code.gson:gson:2.10.1'
+    // PlayerStateManager concurrency tests exercise Bukkit call paths that
+    // fail-soft when no server is running, but the classes must at least load.
+    testImplementation "com.destroystokyo.paper:paper-api:${providers.gradleProperty('paperApiVersion').get()}"
 }
 
 // -----------------------------------------------------------------------------

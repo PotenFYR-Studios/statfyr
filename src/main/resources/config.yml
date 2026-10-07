@@ -196,6 +196,16 @@ collection:
   # per event.
   snapshot-interval-seconds: 300
 
+  # How often LIVE statistics are read from the running server for online
+  # players (seconds, 1-2 recommended). Minecraft's stats/*.json files lag
+  # behind; the live API is the real-time source for online players.
+  live-stats-interval-seconds: 1
+
+  # How often changed player state is written to Statfyr storage (seconds).
+  # Live changes are batched in memory and flushed on this cadence instead
+  # of hitting the disk on every statistic change.
+  persistence-interval-seconds: 5
+
   # Track join/leave sessions (first seen, last seen, durations)
   session-tracking: true
 

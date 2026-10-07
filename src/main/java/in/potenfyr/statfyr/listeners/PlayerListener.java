@@ -35,29 +35,44 @@ public final class PlayerListener implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void onJoin(PlayerJoinEvent event) {
 
-        if (plugin.getAnalytics() == null) {
-            return;
+        // 1. Live statistics: initialise the player's live state from the
+        //    main thread while the Player object is fully valid.
+        if (plugin.getStatsManager() != null) {
+
+            plugin.getStatsManager().onJoin(
+                    event.getPlayer().getUniqueId(),
+                    event.getPlayer().getName()
+            );
         }
 
-        plugin.getAnalytics().onJoin(event.getPlayer());
+        // 2. Analytics: session tracking and profile bookkeeping.
+        if (plugin.getAnalytics() != null) {
+            plugin.getAnalytics().onJoin(event.getPlayer());
+        }
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onQuit(PlayerQuitEvent event) {
 
-        if (plugin.getAnalytics() == null) {
-            return;
+        // 1. Final live synchronization FIRST: read the very latest live
+        //    statistics while the Player object is still valid, update the
+        //    player state and queue an immediate persistence write. After
+        //    this, persisted state represents the player's newest values.
+        if (plugin.getStatsManager() != null) {
+
+            plugin.getStatsManager().onQuit(
+                    event.getPlayer().getUniqueId(),
+                    event.getPlayer().getName()
+            );
         }
 
         lastTouch.remove(event.getPlayer().getUniqueId());
 
-        // Drop the live snapshot so the next request re-reads the stats file
-        // the server just flushed on quit. Without this, an expired cache
-        // entry could keep serving the last in-memory snapshot.
-        plugin.getStatsManager()
-                .invalidate(event.getPlayer().getUniqueId());
-
-        plugin.getAnalytics().onQuit(event.getPlayer());
+        // 2. Analytics: end session, accrue active/AFK time, write the
+        //    session-activity summary.
+        if (plugin.getAnalytics() != null) {
+            plugin.getAnalytics().onQuit(event.getPlayer());
+        }
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)

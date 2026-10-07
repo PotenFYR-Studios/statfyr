@@ -87,6 +87,25 @@ public final class AnalyticsManager {
     private final Set<String> announcedServerMilestones =
             ConcurrentHashMap.newKeySet();
 
+    /**
+     * Profiles with unsaved changes, keyed by UUID. The persistence worker
+     * drains this set in batches instead of every mutation writing to disk
+     * immediately.
+     */
+    private final Set<UUID> dirtyProfiles =
+            ConcurrentHashMap.newKeySet();
+
+    /** Monotonic counter used to collapse profile-save requests. */
+    private final AtomicLong saveVersion =
+            new AtomicLong();
+
+    /** Set while the async startup import is running (reload guard). */
+    private final java.util.concurrent.atomic.AtomicBoolean importing =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    /** Set when the shared server state needs a save. */
+    private volatile boolean serverStateDirty;
+
     // -- cached settings -----------------------------------------------------
     private volatile boolean collectionEnabled = true;
     private volatile boolean sessionTracking = true;
@@ -140,12 +159,18 @@ public final class AnalyticsManager {
         serverState.serverId = serverId;
         serverState.serverName = serverName;
 
-        loadAllProfiles();
-
-        // Pre-track players from world stats files that aren't in profiles yet
-        preTrackPlayersFromWorldStats();
-
         running = true;
+
+        /*
+         * Startup import (profiles + world stats discovery) runs off the
+         * main thread: it performs many small file reads which must never
+         * block server startup. The import is idempotent — running it again
+         * never duplicates players or overwrites newer data (MAX merging).
+         */
+        SchedulerCompat.runAsync(
+                plugin,
+                this::runStartupImport
+        );
 
         long snapshotTicks =
                 Math.max(
@@ -206,8 +231,23 @@ public final class AnalyticsManager {
             onQuit(player);
         }
 
-        saveServerState();
-        storage.close();
+        // Storage stays open: the persistence service flushes the dirty
+        // state synchronously before closeStorage() is called at the very
+        // end of the plugin shutdown sequence.
+    }
+
+    /**
+     * Closes the storage backend. Must be called after the persistence
+     * service has been flushed.
+     */
+    public void closeStorage() {
+
+        try {
+
+            storage.close();
+
+        } catch (Exception ignored) {
+        }
     }
 
     public void reloadSettings() {
@@ -318,50 +358,84 @@ public final class AnalyticsManager {
         long now =
                 System.currentTimeMillis();
 
-        PlayerProfile profile =
-                profile(player.getUniqueId(), player.getName());
+        UUID uuid =
+                player.getUniqueId();
 
-        boolean isNew =
-                profile.firstSeen <= 0L || profile.totalSessions == 0;
+        // Always take the current name straight from the Player object;
+        // usercache.json and offline lookups are only fallbacks.
+        String name =
+                player.getName();
 
-        if (profile.firstSeen <= 0L) {
-            profile.firstSeen = now;
-        }
+        plugin.getPlayerStateManager().lock(uuid);
 
-        profile.name = player.getName();
-        profile.beginSession(now, null);
-        profile.sessionStartMetrics = currentMetricMap(profile);
+        try {
 
-        // On first join or if profile is fresh, seed with vanilla stats file data
-        if (isNew) {
-            seedProfileFromPlayerStatsFile(profile, player);
-        }
+            PlayerProfile profile =
+                    profile(uuid, name);
 
-        serverState.knownPlayers.add(profile.uuid);
-        serverState.recordSession(
-                isoDay(now),
-                ZonedDateTime.now().getHour(),
-                ZonedDateTime.now().getDayOfWeek().name(),
-                profile.uuid,
-                isNew
-        );
-        serverState.recordPeak(isoDay(now), Bukkit.getOnlinePlayers().size());
+            boolean isNew =
+                    profile.firstSeen <= 0L || profile.totalSessions == 0;
 
-        appendActivity(
-                player.getUniqueId(),
-                "join",
-                player.getName(),
-                0L
-        );
+            if (profile.firstSeen <= 0L) {
+                profile.firstSeen = now;
+            }
 
-        saveProfile(profile);
+            profile.name = name;
 
-        if (isNew && cfgBool("integrations.discord.events.new-player", false)) {
-            fireMilestone(
-                    player.getUniqueId(),
-                    "new_player",
-                    player.getName() + " joined for the first time"
+            // Duplicate-session guard: join events can (in rare fork
+            // conditions) fire twice; a player must have at most one active
+            // session per server instance.
+            if (profile.currentSessionStart > 0L) {
+
+                if (plugin.getConfigManager() != null
+                        && plugin.getConfigManager().isDebug()) {
+
+                    plugin.getLogger().warning(
+                            "Duplicate join ignored for " + name
+                    );
+                }
+
+                return;
+            }
+
+            profile.beginSession(now, null);
+            profile.sessionStartMetrics = currentMetricMap(profile);
+
+            // On first join or if profile is fresh, seed with vanilla stats
+            // file data (MAX merge — never lowers live/persisted values).
+            if (isNew) {
+                seedProfileFromPlayerStatsFile(profile, player);
+            }
+
+            serverState.knownPlayers.add(profile.uuid);
+            serverState.recordSession(
+                    isoDay(now),
+                    ZonedDateTime.now().getHour(),
+                    ZonedDateTime.now().getDayOfWeek().name(),
+                    profile.uuid,
+                    isNew
             );
+            serverState.recordPeak(isoDay(now), Bukkit.getOnlinePlayers().size());
+
+            markDirty(uuid);
+            appendActivity(
+                    uuid,
+                    "join",
+                    name,
+                    0L
+            );
+
+            if (isNew && cfgBool("integrations.discord.events.new-player", false)) {
+                fireMilestone(
+                        uuid,
+                        "new_player",
+                        name + " joined for the first time"
+                );
+            }
+
+        } finally {
+
+            plugin.getPlayerStateManager().unlock(uuid);
         }
     }
 
@@ -371,102 +445,116 @@ public final class AnalyticsManager {
             return;
         }
 
-        PlayerProfile profile =
-                profiles.get(player.getUniqueId());
+        UUID uuid =
+                player.getUniqueId();
 
-        if (profile == null) {
-            return;
+        plugin.getPlayerStateManager().lock(uuid);
+
+        try {
+
+            PlayerProfile profile =
+                    profiles.get(uuid);
+
+            if (profile == null) {
+                return;
+            }
+
+            long now =
+                    System.currentTimeMillis();
+
+            boolean isAfk =
+                    afkEnabled
+                            && (now - profile.lastActivity) > afkThresholdMs;
+
+            profile.accrue(now, isAfk, true);
+
+            long sessionSeconds =
+                    profile.endSession(now);
+
+            Map<String, Long> end =
+                    currentMetricMap(profile);
+
+            Map<String, Long> start =
+                    profile.sessionStartMetrics;
+
+            long mined =
+                    delta(end, start, Metrics.BLOCKS_MINED);
+
+            long kills =
+                    delta(end, start, Metrics.KILLS);
+
+            long crafted =
+                    delta(end, start, Metrics.ITEMS_CRAFTED);
+
+            long deaths =
+                    delta(end, start, Metrics.DEATHS);
+
+            if (activityTimeline) {
+
+                if (mined >= 50) {
+                    appendActivity(
+                            uuid,
+                            "mined",
+                            null,
+                            mined
+                    );
+                }
+
+                if (crafted >= 10) {
+                    appendActivity(
+                            uuid,
+                            "crafted",
+                            null,
+                            crafted
+                    );
+                }
+
+                if (kills > 0) {
+                    appendActivity(
+                            uuid,
+                            "kills",
+                            null,
+                            kills
+                    );
+                }
+
+                if (deaths > 0) {
+                    appendActivity(
+                            uuid,
+                            "deaths",
+                            null,
+                            deaths
+                    );
+                }
+
+                appendActivity(
+                        uuid,
+                        "session",
+                        null,
+                        sessionSeconds
+                );
+
+                appendActivity(
+                        uuid,
+                        "leave",
+                        player.getName(),
+                        sessionSeconds
+                );
+            }
+
+            totalSessionSeconds.addAndGet(sessionSeconds);
+
+            checkMilestones(profile, now);
+
+            markDirty(uuid);
+
+        } finally {
+
+            plugin.getPlayerStateManager().unlock(uuid);
         }
 
-        long now =
-                System.currentTimeMillis();
-
-        boolean isAfk =
-                afkEnabled
-                        && (now - profile.lastActivity) > afkThresholdMs;
-
-        profile.accrue(now, isAfk, true);
-
-        long sessionSeconds =
-                profile.endSession(now);
-
-        Map<String, Long> end =
-                currentMetricMap(profile);
-
-        Map<String, Long> start =
-                profile.sessionStartMetrics;
-
-        long mined =
-                delta(end, start, Metrics.BLOCKS_MINED);
-
-        long kills =
-                delta(end, start, Metrics.KILLS);
-
-        long crafted =
-                delta(end, start, Metrics.ITEMS_CRAFTED);
-
-        long deaths =
-                delta(end, start, Metrics.DEATHS);
-
-        if (activityTimeline) {
-
-            if (mined >= 50) {
-                appendActivity(
-                        player.getUniqueId(),
-                        "mined",
-                        null,
-                        mined
-                );
-            }
-
-            if (crafted >= 10) {
-                appendActivity(
-                        player.getUniqueId(),
-                        "crafted",
-                        null,
-                        crafted
-                );
-            }
-
-            if (kills > 0) {
-                appendActivity(
-                        player.getUniqueId(),
-                        "kills",
-                        null,
-                        kills
-                );
-            }
-
-            if (deaths > 0) {
-                appendActivity(
-                        player.getUniqueId(),
-                        "deaths",
-                        null,
-                        deaths
-                );
-            }
-
-            appendActivity(
-                    player.getUniqueId(),
-                    "session",
-                    null,
-                    sessionSeconds
-            );
-
-            appendActivity(
-                    player.getUniqueId(),
-                    "leave",
-                    player.getName(),
-                    sessionSeconds
-            );
-        }
-
-        totalSessionSeconds.addAndGet(sessionSeconds);
-
-        checkMilestones(profile, now);
-
-        saveProfile(profile);
-        saveServerState();
+        // Server state is a shared aggregate; persisted by the worker.
+        markServerStateDirty();
     }
 
     /**
@@ -555,7 +643,7 @@ public final class AnalyticsManager {
                 );
 
                 checkMilestones(profile, now);
-                saveProfile(profile);
+                markDirty(player.getUniqueId());
 
             } catch (Throwable throwable) {
 
@@ -668,7 +756,7 @@ public final class AnalyticsManager {
                     );
                 }
 
-                saveProfile(profile);
+                markDirty(player.getUniqueId());
 
             } catch (Throwable ignored) {
                 // A failed live tick must never break the loop; the next one
@@ -756,24 +844,43 @@ public final class AnalyticsManager {
 
         if (profile == null) {
 
-            profile =
-                    storage.loadProfile(uuid);
+            // Serialise create-or-load per player through the UUID lock so a
+            // concurrent startup import and a join cannot create two rival
+            // profile objects for the same player. Reentrant, so callers that
+            // already hold the lock (join/quit) are unaffected.
+            plugin.getPlayerStateManager().lock(uuid);
 
-            if (profile == null) {
+            try {
 
                 profile =
-                        new PlayerProfile(
-                                uuid,
-                                name,
-                                System.currentTimeMillis()
-                        );
+                        profiles.get(uuid);
 
-            } else if (name != null && !name.isEmpty()) {
+                if (profile == null) {
 
-                profile.name = name;
+                    profile =
+                            storage.loadProfile(uuid);
+
+                    if (profile == null) {
+
+                        profile =
+                                new PlayerProfile(
+                                        uuid,
+                                        name,
+                                        System.currentTimeMillis()
+                                );
+
+                    } else if (name != null && !name.isEmpty()) {
+
+                        profile.name = name;
+                    }
+
+                    profiles.put(uuid, profile);
+                }
+
+            } finally {
+
+                plugin.getPlayerStateManager().unlock(uuid);
             }
-
-            profiles.put(uuid, profile);
         }
 
         return profile;
@@ -799,6 +906,22 @@ public final class AnalyticsManager {
 
         if (uuid == null) {
             return null;
+        }
+
+        // -------------------------------------------------------------------
+        // ONLINE PLAYER: the live PlayerState is the newest available data
+        // (vanilla stats JSON files lag behind). Merge the profile underneath
+        // it so analytics-derived metrics (playtime, sessions, AFK buckets)
+        // are still present.
+        // -------------------------------------------------------------------
+        in.potenfyr.statfyr.player.PlayerStateManager.PlayerState liveState =
+                plugin.getPlayerStateManager()
+                        .state(uuid);
+
+        if (liveState != null && liveState.online()
+                && liveState.statistics() != null) {
+
+            return mergeLiveWithProfile(uuid, liveState);
         }
 
         PlayerProfile profile =
@@ -925,39 +1048,59 @@ public final class AnalyticsManager {
 
         for (UUID uuid : worldUuids) {
 
-            // Skip if already in profiles
+            // Skip if already in profiles. The profiles map is concurrent, so
+            // a player joining while the import runs will not be duplicated:
+            // whichever path wins, the other sees the entry and skips.
             if (profiles.containsKey(uuid)) {
                 continue;
             }
 
-            // Try to load existing profile from disk
-            PlayerProfile existing =
-                    storage.loadProfile(uuid);
+            // Serialise create-or-load per player with joins (profile() uses
+            // the same lock) so an import and a join cannot both create a
+            // fresh profile for the same UUID.
+            plugin.getPlayerStateManager().lock(uuid);
 
-            if (existing != null) {
-                profiles.put(uuid, existing);
-                continue;
+            try {
+
+                // Re-check inside the lock: a join may have created the
+                // profile while we were waiting.
+                if (profiles.containsKey(uuid)) {
+                    continue;
+                }
+
+                // Try to load existing profile from disk
+                PlayerProfile existing =
+                        storage.loadProfile(uuid);
+
+                if (existing != null) {
+                    profiles.put(uuid, existing);
+                    continue;
+                }
+
+                // Get player name from usercache.json or offline player data
+                String playerName =
+                        resolvePlayerName(uuid);
+
+                // Create a new profile seeded with stats from the world stats file
+                PlayerStats vanillaStats =
+                        statsReader.readStats(uuid, playerName);
+
+                PlayerProfile profile =
+                        new PlayerProfile(
+                                uuid,
+                                playerName,
+                                System.currentTimeMillis()
+                        );
+
+                // Seed the profile with data from vanilla stats file (MAX merge)
+                seedProfileFromVanillaStats(profile, vanillaStats);
+
+                profiles.put(uuid, profile);
+
+            } finally {
+
+                plugin.getPlayerStateManager().unlock(uuid);
             }
-
-            // Get player name from usercache.json or offline player data
-            String playerName =
-                    resolvePlayerName(uuid);
-
-            // Create a new profile seeded with stats from the world stats file
-            PlayerStats vanillaStats =
-                    statsReader.readStats(uuid, playerName);
-
-            PlayerProfile profile =
-                    new PlayerProfile(
-                            uuid,
-                            playerName,
-                            System.currentTimeMillis()
-                    );
-
-            // Seed the profile with data from vanilla stats file (MAX merge)
-            seedProfileFromVanillaStats(profile, vanillaStats);
-
-            profiles.put(uuid, profile);
         }
 
         plugin.getLogger().info(
@@ -2652,6 +2795,167 @@ public final class AnalyticsManager {
         }
     }
 
+    /**
+     * Marks a profile dirty for the batched persistence worker.
+     *
+     * @param uuid player whose profile changed
+     */
+    public void markDirty(UUID uuid) {
+
+        if (uuid != null) {
+            dirtyProfiles.add(uuid);
+        }
+    }
+
+    /** Flags the shared server state for the worker's next pass. */
+    public void markServerStateDirty() {
+
+        serverStateDirty = true;
+    }
+
+    /**
+     * Merges the live online snapshot with the analytics profile so online
+     * responses contain both real-time vanilla statistics and
+     * analytics-derived metrics (playtime, sessions, active/AFK buckets).
+     *
+     * <p>Called on HTTP worker threads; the state and profile maps it reads
+     * are immutable/concurrent, so no locking is required and API reads
+     * never mutate player state.
+     */
+    private PlayerStats mergeLiveWithProfile(
+            UUID uuid,
+            in.potenfyr.statfyr.player.PlayerStateManager.PlayerState liveState
+    ) {
+
+        PlayerStats live =
+                liveState.statistics();
+
+        PlayerProfile profile =
+                profiles.get(uuid);
+
+        if (profile == null) {
+            return live;
+        }
+
+        Map<String, Long> profileCustom =
+                new LinkedHashMap<>();
+
+        for (String key : Metrics.leaderboardKeys()) {
+
+            long value =
+                    profile.total(key);
+
+            if (value > 0) {
+                profileCustom.put(key, value);
+            }
+        }
+
+        profileCustom.put(
+                Metrics.ACTIVE_TIME,
+                profile.activeSeconds
+        );
+
+        profileCustom.put(
+                Metrics.AFK_TIME,
+                profile.afkSeconds
+        );
+
+        profileCustom.put(
+                Metrics.SESSIONS,
+                (long) profile.totalSessions
+        );
+
+        Map<String, Map<String, Long>> merged =
+                new HashMap<>();
+
+        // Start from the live snapshot (already the newest vanilla values).
+        for (Map.Entry<String, Map<String, Long>> entry
+                : live.getRawStats().entrySet()) {
+
+            merged.put(
+                    entry.getKey(),
+                    new HashMap<>(entry.getValue())
+            );
+        }
+
+        // Profile-only canonical metrics (playtime, distance aliases, etc.)
+        // are added beneath the live values without ever lowering them.
+        Map<String, Long> liveCustom =
+                merged.get(StatKeys.CATEGORY_CUSTOM);
+
+        if (liveCustom == null) {
+            liveCustom = new HashMap<>();
+            merged.put(StatKeys.CATEGORY_CUSTOM, liveCustom);
+        }
+
+        for (Map.Entry<String, Long> entry : profileCustom.entrySet()) {
+
+            String key = entry.getKey();
+            long value = entry.getValue();
+
+            Long existing = liveCustom.get(key);
+
+            if (existing == null || value > existing) {
+                liveCustom.put(key, value);
+            }
+        }
+
+        return new PlayerStats(
+                uuid,
+                liveState.name() != null
+                        ? liveState.name()
+                        : profile.name,
+                merged
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // Startup import (async, idempotent)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Async startup import: discovers players from the world stats files and
+     * reconciles them with existing Statfyr profiles.
+     *
+     * <p>Idempotent by construction:
+     * <ul>
+     *     <li>players already in memory are skipped</li>
+     *     <li>profiles on disk are loaded (never duplicated)</li>
+     *     <li>stats-file values are only ever MAX-merged, so an old or lagging
+     *     stats JSON can never lower newer persisted or live data</li>
+     * </ul>
+     */
+    private void runStartupImport() {
+
+        if (!importing.compareAndSet(false, true)) {
+            return;
+        }
+
+        try {
+
+            loadAllProfiles();
+
+            preTrackPlayersFromWorldStats();
+
+            plugin.getLogger().info(
+                    "Startup import complete ("
+                            + profiles.size()
+                            + " profiles)."
+            );
+
+        } catch (Throwable throwable) {
+
+            plugin.getLogger().warning(
+                    "Startup import failed (will retry next start): "
+                            + throwable.getMessage()
+            );
+
+        } finally {
+
+            importing.set(false);
+        }
+    }
+
     private void saveServerState() {
 
         try {
@@ -2670,6 +2974,171 @@ public final class AnalyticsManager {
 
         this.serverName = name;
         serverState.serverName = name;
+    }
+
+    // -------------------------------------------------------------------------
+    // Batched persistence worker
+    // -------------------------------------------------------------------------
+
+    /**
+     * Persists one player's profile, guarded by the optimistic version
+     * check.
+     *
+     * <p>The persistence service submits {@code (uuid, version)} pairs; if
+     * the live state has already advanced past {@code version}, this write
+     * is stale and is rejected — an older snapshot can never overwrite a
+     * newer one. On success the state's dirty flag is cleared (only when the
+     * version still matches).
+     *
+     * @param uuid    player to persist
+     * @param version the state version this write was scheduled for
+     * @return {@code true} when a write happened, {@code false} when the
+     *         write was stale or there was nothing to persist
+     */
+    public boolean persistPlayer(UUID uuid, long version) {
+
+        in.potenfyr.statfyr.player.PlayerStateManager states =
+                plugin.getPlayerStateManager();
+
+        in.potenfyr.statfyr.player.PlayerStateManager.PlayerState current =
+                states.state(uuid);
+
+        // STALE WRITE: a newer version exists (and is already queued via the
+        // persistence service's per-player dedup) — reject this one.
+        if (current != null && current.version() > version) {
+            return false;
+        }
+
+        PlayerProfile profile =
+                profiles.get(uuid);
+
+        if (profile == null) {
+
+            try {
+                profile = storage.loadProfile(uuid);
+            } catch (Throwable ignored) {
+                return false;
+            }
+        }
+
+        if (profile != null) {
+
+            try {
+
+                storage.saveProfile(profile);
+
+            } catch (Throwable throwable) {
+
+                // Retry on a later pass.
+                dirtyProfiles.add(uuid);
+
+                plugin.getLogger().warning(
+                        "Profile persist failed for "
+                                + uuid
+                                + " (will retry): "
+                                + throwable.getMessage()
+                );
+
+                return false;
+            }
+        }
+
+        dirtyProfiles.remove(uuid);
+
+        if (current != null && current.version() == version) {
+
+            states.lock(uuid);
+
+            try {
+                states.markClean(uuid, version);
+            } finally {
+                states.unlock(uuid);
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * One persistence pass over the dirty-profile and server-state queues.
+     *
+     * <p>Runs on the shared executor — never the main thread. A failure on
+     * one player leaves the others untouched and the state stays dirty for
+     * the next pass.
+     */
+    public void runPersistencePass() {
+
+        if (!running) {
+            return;
+        }
+
+        // 1. Persisted player profiles that were flagged dirty.
+        if (!dirtyProfiles.isEmpty()) {
+
+            List<UUID> batch =
+                    new ArrayList<>(dirtyProfiles);
+
+            dirtyProfiles.removeAll(batch);
+
+            for (UUID uuid : batch) {
+
+                try {
+
+                    PlayerProfile profile =
+                            profiles.get(uuid);
+
+                    if (profile != null) {
+                        storage.saveProfile(profile);
+                    }
+
+                } catch (Throwable throwable) {
+
+                    // Re-flag for the next pass; never crash the worker.
+                    dirtyProfiles.add(uuid);
+
+                    plugin.getLogger().warning(
+                            "Profile persist failed for "
+                                    + uuid
+                                    + " (will retry): "
+                                    + throwable.getMessage()
+                    );
+                }
+            }
+        }
+
+        // 2. Shared server state (peaks, sessions-by-day, etc.).
+        if (serverStateDirty) {
+
+            serverStateDirty = false;
+
+            try {
+
+                storage.saveServerState(serverState);
+
+            } catch (Throwable throwable) {
+
+                serverStateDirty = true;
+
+                plugin.getLogger().warning(
+                        "Server state persist failed (will retry): "
+                                + throwable.getMessage()
+                );
+            }
+        }
+    }
+
+    /**
+     * Flushes all pending dirty state synchronously. Called from shutdown
+     * (already off the main thread) so no live data is lost on restart.
+     */
+    public void flushDirtyState() {
+
+        try {
+
+            runPersistencePass();
+
+        } catch (Throwable ignored) {
+        }
     }
 
     /** @return the current week key, e.g. {@code 2026-W41}. */
