@@ -225,7 +225,35 @@ public final class Metrics {
         long mobKills =
                 stats.getMobKills();
 
-        metrics.put(KILLS, playerKills + mobKills);
+        // KILLS is the authoritative total across every entity a player has
+        // killed. It is derived from the minecraft:killed category because that
+        // is the one raw category every source maintains: live Player#getStatistic
+        // reads, persisted snapshots and vanilla stats JSON files all populate
+        // minecraft:killed with per-entity counts.
+        //
+        // The per-player vs mob split (PLAYER_KILLS / MOB_KILLS) stays
+        // as-is for display. It is unreliable under every server version
+        // (vanilla does not cleanly distinguish player-kills from mob-kills
+        // in every release), so it is not used as the source of truth for
+        // the aggregate KILLS leaderboard metric.
+
+        long killedTotal =
+                stats.getKilledEntities().values().stream()
+                        .mapToLong(Long::longValue)
+                        .sum();
+
+        // The minecraft:killed category is the authoritative per-entity kill
+        // count and is maintained by every source (live getStatistic reads,
+        // persisted snapshots, vanilla stats JSON files). When it is present we
+        // use its sum as KILLS; otherwise we fall back to the player_kills +
+        // mob_kills split so profiles without a killed category still report a
+        // total.
+        long kills =
+                killedTotal > 0
+                        ? killedTotal
+                        : playerKills + mobKills;
+
+        metrics.put(KILLS, kills);
         metrics.put(DEATHS, stats.getDeaths());
         metrics.put(PLAYER_KILLS, playerKills);
         metrics.put(MOB_KILLS, mobKills);
