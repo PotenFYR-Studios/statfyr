@@ -1,3 +1,43 @@
+## 1.0.2 — 2026-10-08
+
+[Full changelog](https://github.com/PotenFYR-Studios/statfyr/compare/v1.0.1-BETA...v1.0.2)
+
+### Features
+
+- live stats pipeline with batched, stale-safe persistence ([5b85490](https://github.com/PotenFYR-Studios/statfyr/commit/5b85490))
+- add DashboardConfig and dashboard.yml for web dashboard configuration ([e160779](https://github.com/PotenFYR-Studios/statfyr/commit/e160779))
+
+### Bug Fixes
+
+- derive leaderboard kills from the minecraft:killed category ([582f796](https://github.com/PotenFYR-Studios/statfyr/commit/582f796))
+
+### Documentation
+
+- repoint commit links to rewritten history ([3f39868](https://github.com/PotenFYR-Studios/statfyr/commit/3f39868))
+- 1.0.1-BETA [skip ci] ([d41fc86](https://github.com/PotenFYR-Studios/statfyr/commit/d41fc86))
+
+### Tests
+
+- tolerate loaded concurrency runners ([7fd9feb](https://github.com/PotenFYR-Studios/statfyr/commit/7fd9feb))
+
+### Chores
+
+- release 1.0.2 ([891325f](https://github.com/PotenFYR-Studios/statfyr/commit/891325f))
+- normalize line endings (.gitattributes) ([3c508a5](https://github.com/PotenFYR-Studios/statfyr/commit/3c508a5))
+
+### Other Changes
+
+- Fixed concurrency bug ([1faa5f6](https://github.com/PotenFYR-Studios/statfyr/commit/1faa5f6))
+- Merge branch 'master' of https://github.com/PotenFYR-Studios/statfyr ([d8d57a5](https://github.com/PotenFYR-Studios/statfyr/commit/d8d57a5))
+- Added bugs now fixing them ([f30c820](https://github.com/PotenFYR-Studios/statfyr/commit/f30c820))
+- Fixed File storage issues ([fd87269](https://github.com/PotenFYR-Studios/statfyr/commit/fd87269))
+- Fixed things ([ee39b68](https://github.com/PotenFYR-Studios/statfyr/commit/ee39b68))
+- Added Fix to Bug Later ([675056d](https://github.com/PotenFYR-Studios/statfyr/commit/675056d))
+- Minor fixes later ([ead4329](https://github.com/PotenFYR-Studios/statfyr/commit/ead4329))
+
+
+---
+
 ## 1.0.1-BETA — 2026-10-06
 
 [Full changelog](https://github.com/PotenFYR-Studios/statfyr/compare/v1.0.0-BETA...v1.0.1-BETA)
