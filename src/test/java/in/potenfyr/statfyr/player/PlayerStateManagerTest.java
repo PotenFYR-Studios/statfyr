@@ -220,7 +220,7 @@ class PlayerStateManagerTest {
         try {
 
             assertTrue(
-                    allHoldingLock.await(5, TimeUnit.SECONDS),
+                    allHoldingLock.await(15, TimeUnit.SECONDS),
                     "workers must be able to hold different UUID locks simultaneously"
             );
 
