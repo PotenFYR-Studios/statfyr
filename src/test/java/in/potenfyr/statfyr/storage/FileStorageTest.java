@@ -143,6 +143,53 @@ class FileStorageTest {
     }
 
     @Test
+    void olderVersionCannotReplaceNewerProfile() {
+
+        FileStorage storage = newStorage();
+        UUID uuid = UUID.randomUUID();
+
+        PlayerProfile older =
+                new PlayerProfile(uuid, "older", 1L);
+        PlayerProfile newer =
+                new PlayerProfile(uuid, "newer", 2L);
+
+        storage.saveProfile(newer, 2L);
+        storage.saveProfile(older, 1L);
+
+        assertEquals("newer", storage.loadProfile(uuid).name);
+    }
+
+    @Test
+    void profileDetachedCopyRecursivelyCopiesMutableState() {
+
+        UUID uuid = UUID.randomUUID();
+        PlayerProfile profile =
+                new PlayerProfile(uuid, "Steve", 1L);
+
+        Map<String, Long> baseline = new HashMap<>();
+        baseline.put("kills", 4L);
+        profile.periodBaselines.put("week", baseline);
+
+        Map<String, Map<String, Long>> raw = new HashMap<>();
+        raw.put("mined", new HashMap<>());
+        raw.get("mined").put("stone", 8L);
+        profile.statSnapshots.add(raw);
+
+        PlayerProfile copy = profile.detachedCopy();
+
+        baseline.put("kills", 99L);
+        raw.get("mined").put("stone", 100L);
+        profile.periodBaselines.put("month", new HashMap<>());
+
+        assertEquals(4L, copy.periodBaselines.get("week").get("kills"));
+        assertEquals(
+                8L,
+                copy.statSnapshots.get(0).get("mined").get("stone")
+        );
+        assertTrue(!copy.periodBaselines.containsKey("month"));
+    }
+
+    @Test
     void periodArchiveRoundTrip() {
 
         FileStorage storage =

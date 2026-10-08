@@ -194,7 +194,7 @@ public final class PlayerAnalyticsHandler {
     ) throws IOException {
 
         PlayerProfile profile =
-                plugin.getAnalytics().profileIfPresent(uuid);
+                plugin.getAnalytics().profileSnapshot(uuid);
 
         long now =
                 System.currentTimeMillis();
@@ -260,7 +260,7 @@ public final class PlayerAnalyticsHandler {
     ) throws IOException {
 
         PlayerProfile profile =
-                plugin.getAnalytics().profileIfPresent(uuid);
+                plugin.getAnalytics().profileSnapshot(uuid);
 
         Map<String, Object> map =
                 new LinkedHashMap<>();

@@ -444,7 +444,7 @@ public final class PlayerSummaryHandler implements HttpHandler {
         if (analytics != null) {
 
             in.potenfyr.statfyr.analytics.PlayerProfile profile =
-                    analytics.profileIfPresent(playerUuid);
+                    analytics.profileSnapshot(playerUuid);
 
             JsonBuilder analyticsSection =
                     new JsonBuilder()

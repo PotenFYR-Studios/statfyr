@@ -421,33 +421,40 @@ public final class StatsManager {
             return;
         }
 
-        profile.addStatSnapshot(live.getRawStats());
+        UUID uuid = player.getUniqueId();
+        stateManager.lock(uuid);
 
-        Map<String, Map<String, Long>> rawStats =
-                live.getRawStats();
+        try {
+            profile.addStatSnapshot(live.getRawStats());
 
-        Map<String, Long> customStats =
-                rawStats.get(StatKeys.CATEGORY_CUSTOM);
+            Map<String, Map<String, Long>> rawStats =
+                    live.getRawStats();
 
-        if (customStats == null) {
-            return;
-        }
+            Map<String, Long> customStats =
+                    rawStats.get(StatKeys.CATEGORY_CUSTOM);
 
-        for (Map.Entry<String, Long> entry : customStats.entrySet()) {
-
-            String key = entry.getKey();
-            Long value = entry.getValue();
-
-            if (key == null || value == null) {
-                continue;
+            if (customStats == null) {
+                return;
             }
 
-            long existing =
-                    profile.allTime(key);
+            for (Map.Entry<String, Long> entry : customStats.entrySet()) {
 
-            if (value > existing) {
-                profile.allTime.put(key, value);
+                String key = entry.getKey();
+                Long value = entry.getValue();
+
+                if (key == null || value == null) {
+                    continue;
+                }
+
+                long existing =
+                        profile.allTime(key);
+
+                if (value > existing) {
+                    profile.allTime.put(key, value);
+                }
             }
+        } finally {
+            stateManager.unlock(uuid);
         }
     }
 

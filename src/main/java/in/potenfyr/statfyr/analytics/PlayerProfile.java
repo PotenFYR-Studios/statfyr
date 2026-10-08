@@ -90,6 +90,84 @@ public final class PlayerProfile {
     }
 
     /**
+     * Creates a detached copy of this profile.
+     *
+     * <p>The caller must hold the owning player's UUID lock while invoking
+     * this method. Every mutable field is copied recursively so the returned
+     * profile can be read or serialized after the lock is released.
+     */
+    public PlayerProfile detachedCopy() {
+
+        PlayerProfile copy =
+                new PlayerProfile();
+
+        copy.uuid = uuid;
+        copy.name = name;
+        copy.firstSeen = firstSeen;
+        copy.lastSeen = lastSeen;
+        copy.lastJoin = lastJoin;
+        copy.totalPlaytimeSeconds = totalPlaytimeSeconds;
+        copy.activeSeconds = activeSeconds;
+        copy.afkSeconds = afkSeconds;
+        copy.totalSessions = totalSessions;
+        copy.longestSessionSeconds = longestSessionSeconds;
+        copy.currentSessionStart = currentSessionStart;
+        copy.maxSnapshots = maxSnapshots;
+
+        copy.allTime = copyMap(allTime);
+        copy.periodBaselines = new HashMap<>();
+
+        if (periodBaselines != null) {
+            for (Map.Entry<String, Map<String, Long>> entry
+                    : periodBaselines.entrySet()) {
+                copy.periodBaselines.put(
+                        entry.getKey(),
+                        copyMap(entry.getValue())
+                );
+            }
+        }
+
+        copy.periodStarts = copyMap(periodStarts);
+        copy.customMetrics = copyMap(customMetrics);
+        copy.milestones = copyMap(milestones);
+        copy.statSnapshots = new ArrayList<>();
+
+        if (statSnapshots != null) {
+            for (Map<String, Map<String, Long>> snapshot : statSnapshots) {
+                Map<String, Map<String, Long>> snapshotCopy =
+                        new HashMap<>();
+
+                if (snapshot != null) {
+                    for (Map.Entry<String, Map<String, Long>> entry
+                            : snapshot.entrySet()) {
+                        snapshotCopy.put(
+                                entry.getKey(),
+                                copyMap(entry.getValue())
+                        );
+                    }
+                }
+
+                copy.statSnapshots.add(snapshotCopy);
+            }
+        }
+
+        copy.lastAccrual = lastAccrual;
+        copy.lastActivity = lastActivity;
+        copy.afk = afk;
+        copy.sessionStartMetrics = copyMap(sessionStartMetrics);
+        copy.lastSnapshotAt = lastSnapshotAt;
+
+        return copy;
+    }
+
+    private static <K, V> Map<K, V> copyMap(Map<K, V> source) {
+
+        return source == null
+                ? new HashMap<>()
+                : new HashMap<>(source);
+    }
+
+    /**
      * @return the parsed UUID, or {@code null} when malformed
      */
     public UUID id() {

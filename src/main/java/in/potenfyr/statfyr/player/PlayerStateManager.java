@@ -341,6 +341,34 @@ public final class PlayerStateManager {
     }
 
     /**
+     * Bumps the live version for a profile-side mutation and keeps it dirty.
+     * Callers may already hold the UUID lock; the state transition itself is
+     * intentionally lock-free because the manager's contract requires that.
+     */
+    public PlayerState markDirty(UUID uuid) {
+
+        PlayerState state = states.get(uuid);
+
+        if (state == null) {
+            return null;
+        }
+
+        PlayerState updated = new PlayerState(
+                uuid,
+                state.name,
+                state.online,
+                state.statistics,
+                state.lastSeen,
+                System.currentTimeMillis(),
+                state.version + 1L,
+                true
+        );
+
+        states.put(uuid, updated);
+        return updated;
+    }
+
+    /**
      * Removes the in-memory state entirely (used when analytics owns the
      * offline lifecycle and the entry would otherwise never be read again).
      */

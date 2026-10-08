@@ -17,6 +17,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -45,6 +46,10 @@ public final class FileStorage implements Storage {
     private final File playerHistoryDir;
     private final File activityDir;
     private final Logger logger;
+    private final ConcurrentHashMap<UUID, Object> profileWriteLocks =
+            new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<UUID, Long> persistedProfileVersions =
+            new ConcurrentHashMap<>();
 
     public FileStorage(File dataFolder, Logger logger) {
 
@@ -138,7 +143,7 @@ public final class FileStorage implements Storage {
         try {
 
             // Write directly to target for better Windows compatibility
-            writeFile(target, JsonIO.toJson(profile));
+            writeFile(target, JsonIO.toJson(profile.detachedCopy()));
 
         } catch (Exception exception) {
 
@@ -147,6 +152,53 @@ public final class FileStorage implements Storage {
                     "Failed to save profile " + uuid,
                     exception
             );
+        }
+    }
+
+    @Override
+    public void saveProfile(PlayerProfile snapshot, long version) {
+
+        if (snapshot == null || snapshot.uuid == null) {
+            return;
+        }
+
+        UUID uuid;
+
+        try {
+            uuid = UUID.fromString(snapshot.uuid);
+        } catch (Exception exception) {
+            return;
+        }
+
+        Object writeLock =
+                profileWriteLocks.computeIfAbsent(
+                        uuid,
+                        ignored -> new Object()
+                );
+
+        synchronized (writeLock) {
+
+            Long persisted =
+                    persistedProfileVersions.get(uuid);
+
+            if (persisted != null && version < persisted) {
+                return;
+            }
+
+            try {
+                writeFile(profileFile(uuid), JsonIO.toJson(snapshot));
+                persistedProfileVersions.put(uuid, version);
+            } catch (Exception exception) {
+                logger.log(
+                        Level.WARNING,
+                        "Failed to save profile " + uuid,
+                        exception
+                );
+                throw new IllegalStateException(
+                        "Failed to save profile " + uuid,
+                        exception
+                );
+            }
         }
     }
 

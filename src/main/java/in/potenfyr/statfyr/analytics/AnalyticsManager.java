@@ -568,13 +568,19 @@ public final class AnalyticsManager {
             return;
         }
 
-        PlayerProfile profile =
-                profiles.get(player.getUniqueId());
+        UUID uuid = player.getUniqueId();
+        plugin.getPlayerStateManager().lock(uuid);
 
-        if (profile != null) {
-            profile.lastActivity =
-                    System.currentTimeMillis();
-            profile.afk = false;
+        try {
+            PlayerProfile profile = profiles.get(uuid);
+
+            if (profile != null) {
+                profile.lastActivity =
+                        System.currentTimeMillis();
+                profile.afk = false;
+            }
+        } finally {
+            plugin.getPlayerStateManager().unlock(uuid);
         }
     }
 
@@ -612,38 +618,39 @@ public final class AnalyticsManager {
                 Map<String, Long> metrics =
                         Metrics.extract(stats);
 
-                applyMetrics(profile, metrics, now);
+                UUID uuid = player.getUniqueId();
+                double balance = balanceProvider == null
+                        ? 0.0
+                        : balanceProvider.balance(uuid, player.getName());
 
-                if (balanceProvider != null) {
+                plugin.getPlayerStateManager().lock(uuid);
 
-                    double balance =
-                            balanceProvider.balance(
-                                    player.getUniqueId(),
-                                    player.getName()
-                            );
+                try {
+                    applyMetrics(profile, metrics, now);
 
-                    profile.allTime.put(
-                            Metrics.BALANCE,
-                            (long) balance
-                    );
+                    if (balanceProvider != null) {
+                        profile.allTime.put(
+                                Metrics.BALANCE,
+                                (long) balance
+                        );
+                    }
+
+                    boolean isAfk =
+                            afkEnabled
+                                    && (now - profile.lastActivity)
+                                    > afkThresholdMs;
+
+                    profile.afk = isAfk;
+                    profile.accrue(now, isAfk, true);
+                    profile.lastSeen = now;
+                    profile.lastSnapshotAt = now;
+                    checkMilestones(profile, now);
+                    markDirty(uuid);
+                } finally {
+                    plugin.getPlayerStateManager().unlock(uuid);
                 }
 
-                boolean isAfk =
-                        afkEnabled
-                                && (now - profile.lastActivity) > afkThresholdMs;
-
-                profile.afk = isAfk;
-                profile.accrue(now, isAfk, true);
-                profile.lastSeen = now;
-                profile.lastSnapshotAt = now;
-
-                storage.appendSnapshot(
-                        player.getUniqueId(),
-                        new Snapshot(now, metrics)
-                );
-
-                checkMilestones(profile, now);
-                markDirty(player.getUniqueId());
+                storage.appendSnapshot(uuid, new Snapshot(now, metrics));
 
             } catch (Throwable throwable) {
 
@@ -727,8 +734,8 @@ public final class AnalyticsManager {
 
             try {
 
-                PlayerProfile profile =
-                        profiles.get(player.getUniqueId());
+                UUID uuid = player.getUniqueId();
+                PlayerProfile profile = profiles.get(uuid);
 
                 if (profile == null) {
 
@@ -736,27 +743,34 @@ public final class AnalyticsManager {
                             profile(player.getUniqueId(), player.getName());
                 }
 
-                boolean isAfk =
-                        afkEnabled
-                                && (now - profile.lastActivity) > afkThresholdMs;
-
-                profile.afk = isAfk;
-                profile.accrue(now, isAfk, true);
-                profile.lastSeen = now;
-
                 PlayerStats stats =
                         plugin.getStatsManager()
-                                .getPlayerStats(player.getUniqueId());
+                                .getPlayerStats(uuid);
 
-                if (stats != null) {
-                    applyMetrics(
-                            profile,
-                            Metrics.extract(stats),
-                            now
-                    );
+                plugin.getPlayerStateManager().lock(uuid);
+
+                try {
+                    boolean isAfk =
+                            afkEnabled
+                                    && (now - profile.lastActivity)
+                                    > afkThresholdMs;
+
+                    profile.afk = isAfk;
+                    profile.accrue(now, isAfk, true);
+                    profile.lastSeen = now;
+
+                    if (stats != null) {
+                        applyMetrics(
+                                profile,
+                                Metrics.extract(stats),
+                                now
+                        );
+                    }
+
+                    markDirty(uuid);
+                } finally {
+                    plugin.getPlayerStateManager().unlock(uuid);
                 }
-
-                markDirty(player.getUniqueId());
 
             } catch (Throwable ignored) {
                 // A failed live tick must never break the loop; the next one
@@ -892,6 +906,25 @@ public final class AnalyticsManager {
     }
 
     /**
+     * Returns a detached profile snapshot for readers outside the UUID lock.
+     */
+    public PlayerProfile profileSnapshot(UUID uuid) {
+
+        if (uuid == null) {
+            return null;
+        }
+
+        plugin.getPlayerStateManager().lock(uuid);
+
+        try {
+            PlayerProfile profile = profiles.get(uuid);
+            return profile == null ? null : profile.detachedCopy();
+        } finally {
+            plugin.getPlayerStateManager().unlock(uuid);
+        }
+    }
+
+    /**
      * Returns complete stats for an offline player by merging:
      * 1. Analytics profile data (allTime metrics, session data)
      * 2. Latest raw stat snapshot (item breakdowns from when player was online)
@@ -925,7 +958,7 @@ public final class AnalyticsManager {
         }
 
         PlayerProfile profile =
-                profiles.get(uuid);
+                profileSnapshot(uuid);
 
         // Load from disk if not in memory
         if (profile == null) {
@@ -1020,7 +1053,17 @@ public final class AnalyticsManager {
 
     public Collection<PlayerProfile> allProfiles() {
 
-        return profiles.values();
+        List<PlayerProfile> snapshots =
+                new ArrayList<>();
+
+        for (UUID uuid : profiles.keySet()) {
+            PlayerProfile snapshot = profileSnapshot(uuid);
+            if (snapshot != null) {
+                snapshots.add(snapshot);
+            }
+        }
+
+        return snapshots;
     }
 
     /**
@@ -1425,17 +1468,24 @@ public final class AnalyticsManager {
         PlayerProfile profile =
                 profile(uuid, null);
 
-        profile.customMetrics.put(metric, value);
+        plugin.getPlayerStateManager().lock(uuid);
+
+        try {
+            profile.customMetrics.put(metric, value);
+            markDirty(uuid);
+        } finally {
+            plugin.getPlayerStateManager().unlock(uuid);
+        }
     }
 
     public Map<String, Double> customMetrics(UUID uuid) {
 
         PlayerProfile profile =
-                profiles.get(uuid);
+                profileSnapshot(uuid);
 
         return profile == null
                 ? new LinkedHashMap<>()
-                : profile.customMetrics;
+                : new LinkedHashMap<>(profile.customMetrics);
     }
 
     /**
@@ -2781,20 +2831,6 @@ public final class AnalyticsManager {
         return days;
     }
 
-    private void saveProfile(PlayerProfile profile) {
-
-        try {
-
-            plugin.getExecutorService().execute(
-                    () -> storage.saveProfile(profile)
-            );
-
-        } catch (Throwable ignored) {
-
-            storage.saveProfile(profile);
-        }
-    }
-
     /**
      * Marks a profile dirty for the batched persistence worker.
      *
@@ -2804,6 +2840,14 @@ public final class AnalyticsManager {
 
         if (uuid != null) {
             dirtyProfiles.add(uuid);
+
+            in.potenfyr.statfyr.player.PlayerStateManager.PlayerState state =
+                    plugin.getPlayerStateManager().markDirty(uuid);
+
+            if (state != null) {
+                plugin.getPersistenceService()
+                        .submit(uuid, state.version());
+            }
         }
     }
 
@@ -3000,60 +3044,80 @@ public final class AnalyticsManager {
         in.potenfyr.statfyr.player.PlayerStateManager states =
                 plugin.getPlayerStateManager();
 
-        in.potenfyr.statfyr.player.PlayerStateManager.PlayerState current =
-                states.state(uuid);
+        PlayerProfile snapshot;
+        long snapshotVersion;
+        PlayerProfile profile;
 
-        // STALE WRITE: a newer version exists (and is already queued via the
-        // persistence service's per-player dedup) — reject this one.
-        if (current != null && current.version() > version) {
+        states.lock(uuid);
+
+        try {
+            in.potenfyr.statfyr.player.PlayerStateManager.PlayerState current =
+                    states.state(uuid);
+
+            // STALE WRITE: a newer version exists; do not copy or write it.
+            if (current != null && current.version() > version) {
+                return false;
+            }
+
+            profile = profiles.get(uuid);
+
+            if (profile == null) {
+                snapshot = null;
+                snapshotVersion = current == null ? version : current.version();
+            } else {
+                snapshot = profile.detachedCopy();
+                snapshotVersion = current == null ? version : current.version();
+            }
+
+        } finally {
+            states.unlock(uuid);
+        }
+
+        if (snapshot == null) {
+            try {
+                profile = storage.loadProfile(uuid);
+            } catch (Throwable throwable) {
+                return false;
+            }
+
+            if (profile == null) {
+                return false;
+            }
+
+            snapshot = profile.detachedCopy();
+        }
+
+        try {
+            storage.saveProfile(snapshot, snapshotVersion);
+        } catch (Throwable throwable) {
+
+            // Retry on a later pass.
+            dirtyProfiles.add(uuid);
+
+            plugin.getLogger().warning(
+                    "Profile persist failed for "
+                            + uuid
+                            + " (will retry): "
+                            + throwable.getMessage()
+            );
+
             return false;
         }
 
-        PlayerProfile profile =
-                profiles.get(uuid);
+        states.lock(uuid);
 
-        if (profile == null) {
+        try {
+            in.potenfyr.statfyr.player.PlayerStateManager.PlayerState current =
+                    states.state(uuid);
 
-            try {
-                profile = storage.loadProfile(uuid);
-            } catch (Throwable ignored) {
-                return false;
-            }
-        }
-
-        if (profile != null) {
-
-            try {
-
-                storage.saveProfile(profile);
-
-            } catch (Throwable throwable) {
-
-                // Retry on a later pass.
+            if (current != null && current.version() == snapshotVersion) {
+                dirtyProfiles.remove(uuid);
+                states.markClean(uuid, snapshotVersion);
+            } else {
                 dirtyProfiles.add(uuid);
-
-                plugin.getLogger().warning(
-                        "Profile persist failed for "
-                                + uuid
-                                + " (will retry): "
-                                + throwable.getMessage()
-                );
-
-                return false;
             }
-        }
-
-        dirtyProfiles.remove(uuid);
-
-        if (current != null && current.version() == version) {
-
-            states.lock(uuid);
-
-            try {
-                states.markClean(uuid, version);
-            } finally {
-                states.unlock(uuid);
-            }
+        } finally {
+            states.unlock(uuid);
         }
 
         return true;
@@ -3084,11 +3148,11 @@ public final class AnalyticsManager {
 
                 try {
 
-                    PlayerProfile profile =
-                            profiles.get(uuid);
+                    in.potenfyr.statfyr.player.PlayerStateManager.PlayerState state =
+                            plugin.getPlayerStateManager().state(uuid);
 
-                    if (profile != null) {
-                        storage.saveProfile(profile);
+                    if (state != null) {
+                        persistPlayer(uuid, state.version());
                     }
 
                 } catch (Throwable throwable) {

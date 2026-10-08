@@ -126,7 +126,7 @@ public final class StatfyrPlaceholderExpansion extends PlaceholderExpansion {
             case "first_seen": {
 
                 in.potenfyr.statfyr.analytics.PlayerProfile profile =
-                        plugin.getAnalytics().profileIfPresent(uuid);
+                        plugin.getAnalytics().profileSnapshot(uuid);
 
                 return profile == null
                         ? ""
@@ -136,7 +136,7 @@ public final class StatfyrPlaceholderExpansion extends PlaceholderExpansion {
             case "last_seen": {
 
                 in.potenfyr.statfyr.analytics.PlayerProfile profile =
-                        plugin.getAnalytics().profileIfPresent(uuid);
+                        plugin.getAnalytics().profileSnapshot(uuid);
 
                 return profile == null
                         ? ""
@@ -146,7 +146,7 @@ public final class StatfyrPlaceholderExpansion extends PlaceholderExpansion {
             case "segment": {
 
                 in.potenfyr.statfyr.analytics.PlayerProfile profile =
-                        plugin.getAnalytics().profileIfPresent(uuid);
+                        plugin.getAnalytics().profileSnapshot(uuid);
 
                 return profile == null
                         ? ""

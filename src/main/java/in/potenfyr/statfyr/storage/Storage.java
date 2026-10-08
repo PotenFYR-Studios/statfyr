@@ -28,6 +28,15 @@ public interface Storage {
 
     void saveProfile(PlayerProfile profile);
 
+    /**
+     * Saves a detached profile snapshot when its live-state version is still
+     * current. Backends that support stale-write protection should reject an
+     * older version rather than replacing a newer one.
+     */
+    default void saveProfile(PlayerProfile profile, long version) {
+        saveProfile(profile);
+    }
+
     List<UUID> knownProfileIds();
 
     void deleteProfile(UUID uuid);

@@ -248,11 +248,11 @@ public final class StatfyrCommand
 
         PlayerProfile profile =
                 plugin.getAnalytics()
-                        .profileIfPresent(targetUuid);
+                        .profileSnapshot(targetUuid);
 
         if (profile == null) {
             plugin.getAnalytics().profile(targetUuid, targetName);
-            profile = plugin.getAnalytics().profileIfPresent(targetUuid);
+            profile = plugin.getAnalytics().profileSnapshot(targetUuid);
         }
 
         if (profile == null
