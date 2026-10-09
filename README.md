@@ -2,10 +2,10 @@
 
 <img src="https://capsule-render.vercel.app/api?type=waving&color=0:8b5cf6,50:ec4899,100:f97316&height=220&section=header&text=Statfyr&fontSize=52&fontColor=ffffff&fontAlignY=34&desc=A%20blazing-fast%20REST%20API%20for%20Minecraft%20player%20statistics&descSize=20&descAlignY=55&animation=twinkling" width="100%" alt="Statfyr banner"/>
 
-[![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=20&pause=1200&color=8B5CF6&center=true&vCenter=true&width=800&lines=Every+player+statistic%2C+one+JSON+API;Live+reads+with+zero+TPS+impact;Bearer+auth%2C+rate+limits%2C+gzip+built+in;Bukkit+%C2%B7+Spigot+%C2%B7+Paper+%C2%B7+Purpur+%C2%B7+Folia+1.8.x+to+26.x)](https:/docs.potenfyr.in/statfyr)
+[![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=20&pause=1200&color=8B5CF6&center=true&vCenter=true&width=800&lines=Every+player+statistic%2C+one+JSON+API;Live+reads+with+zero+TPS+impact;Bearer+auth%2C+rate+limits%2C+gzip+built+in;Bukkit+%C2%B7+Spigot+%C2%B7+Paper+%C2%B7+Purpur+%C2%B7+Folia+1.8.x+to+26.x)](https://docs.potenfyr.in/repo/statfyr)
 
 [![Modrinth](https://img.shields.io/badge/Modrinth-statfyr-1bd96a?style=for-the-badge&logo=modrinth&logoColor=white&labelColor=1c1e26)](https://modrinth.com/plugin/statfyr)
-[![Docs](https://img.shields.io/badge/https:/docs.potenfyr.in/statfyr-8b5cf6?style=for-the-badge&logo=githubpages&logoColor=white&labelColor=1c1e26)](https:/docs.potenfyr.in/statfyr)
+[![Docs](https://img.shields.io/badge/https://docs.potenfyr.in/repo/statfyr?style=for-the-badge&logo=githubpages&logoColor=white&labelColor=1c1e26)](https://docs.potenfyr.in/repo/statfyr)
 [![Build](https://img.shields.io/github/actions/workflow/status/PotenFYR-Studios/statfyr/build.yml?branch=master&style=for-the-badge&logo=githubactions&label=Build&labelColor=1c1e26&color=2ea043)](https://github.com/PotenFYR-Studios/statfyr/actions/workflows/build.yml)
 [![License](https://img.shields.io/badge/License-Apache--2.0%20%2B%20Commons%20Clause-f97316?style=for-the-badge&labelColor=1c1e26)](LICENSE)
 [![View](https://komarev.com/ghpvc/?username=PotenFYR-Studios-statfyr&color=ec4899&style=for-the-badge&label=VIEW&labelColor=1c1e26)](https://github.com/PotenFYR-Studios/statfyr)
@@ -16,7 +16,7 @@
 
 Stats are read **asynchronously, off the main thread**, and served from an in-memory cache, so API traffic never touches your TPS.
 
-📚 **Full documentation → [https:/docs.potenfyr.in/statfyr](https:/docs.potenfyr.in/statfyr)**
+📚 **Full documentation → [https://docs.potenfyr.in/repo/statfyr](https://docs.potenfyr.in/repo/statfyr)**
 
 ---
 
@@ -160,7 +160,7 @@ curl "http://localhost:8080/api/player/Notch/sessions"
 
 </details>
 
-Every request shape, parameter, and response field is documented in the [API Reference](https:/docs.potenfyr.in/statfyr/api).
+Every request shape, parameter, and response field is documented in the [API Reference](https://docs.potenfyr.in/repo/statfyr/api).
 
 ## ⚙️ Configuration
 
@@ -202,7 +202,7 @@ collection:
 | `STATFYR_API_KEY`           | `security.api-key`         |
 | `STATFYR_KEYSTORE_PASSWORD` | `https.keystore-password`  |
 
-> Some keys shipped in `config.yml` (compression, async, cache, docs, and a few others) are read but **not yet enforced** in the 1.0.0-BETA build; the [configuration reference](https:/docs.potenfyr.in/statfyr/configuration) marks every key as enforced or reserved.
+> Some keys shipped in `config.yml` (compression, async, cache, docs, and a few others) are read but **not yet enforced** in the 1.0.0-BETA build; the [configuration reference](https://docs.potenfyr.in/repo/statfyr/configuration) marks every key as enforced or reserved.
 
 ## 🔒 Securing Your API
 
@@ -345,7 +345,7 @@ Only information required for Minecraft server analytics is stored.
 ## 💬 Support
 
 - **Bugs, ideas, questions** → [GitHub Issues](https://github.com/PotenFYR-Studios/statfyr/issues); issue templates are provided, so pick the closest fit
-- **Documentation** → [https:/docs.potenfyr.in/statfyr](https:/docs.potenfyr.in/statfyr)
+- **Documentation** → [https://docs.potenfyr.in/repo/statfyr](https://docs.potenfyr.in/repo/statfyr)
 
 ## 🤝 Contributing
 
